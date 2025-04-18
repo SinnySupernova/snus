@@ -21,7 +21,7 @@ else
 fi
 
 mkdir -p ./env
-echo -e "\
+printf "\
 ############### DO NOT EDIT ###############\n\
 ## this file was generated automatically ##\n\
 ###########################################\n\
