@@ -147,7 +147,7 @@ services:
       - no-new-privileges:true
     user: "65534:${DOCKER_SOCK_GID:?error}"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DOCKER_SOCK_PATH:?error}:/var/run/docker.sock:ro
 
   init-volumes:
     image: busybox

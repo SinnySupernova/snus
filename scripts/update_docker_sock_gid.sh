@@ -25,4 +25,5 @@ printf "\
 ############### DO NOT EDIT ###############\n\
 ## this file was generated automatically ##\n\
 ###########################################\n\
-DOCKER_SOCK_GID=$(stat -c '%g' "$DOCKER_SOCK_PATH")" > ./env/.env.docker_sock
+DOCKER_SOCK_GID=$(stat -c '%g' "$DOCKER_SOCK_PATH")\n\
+DOCKER_SOCK_PATH=$DOCKER_SOCK_PATH" > ./env/.env.docker_sock

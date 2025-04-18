@@ -46,6 +46,3 @@ write_env ACMED_REPO_DIR $(tq -r 'certs.acmed_repo'< "$config_file" | make_path_
 write_env ACMESH_REPO_DIR $(tq -r 'certs.acmesh_repo'< "$config_file" | make_path_explicit)
 
 write_env DOCKERGEN_REPO_DIR $(tq -r 'dockergen.repo'< "$config_file" | make_path_explicit)
-
-. ./env/.env.docker_sock # <- DOCKER_SOCK_GID
-write_env DOCKER_SOCK_GID ${DOCKER_SOCK_GID}
