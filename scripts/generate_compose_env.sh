@@ -24,7 +24,7 @@ make_path_explicit() {
   done <<< "${1:-$(cat)}"
 }
 
-
+mkdir -p ./env
 rm ./env/.env.compose
 
 write_env NGINX_UID $(tq 'nginx.uid'< "$config_file")

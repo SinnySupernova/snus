@@ -20,6 +20,7 @@ else
     fi
 fi
 
+mkdir -p ./env
 echo -e "\
 ############### DO NOT EDIT ###############\n\
 ## this file was generated automatically ##\n\
