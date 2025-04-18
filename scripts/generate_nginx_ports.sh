@@ -9,7 +9,7 @@ if [ -z "$NGINX_PORTS" ]; then
   exit 1
 fi
 
-IFS=',' read -ra PORTS <<< "$NGINX_PORTS"
+PORTS=$(echo "$NGINX_PORTS" | tr ',' ' ')
 
 OUTPUT_FILE="$2"
 
@@ -17,7 +17,7 @@ OUTPUT_FILE="$2"
     echo "services:"
     echo "  nginx:"
     echo "    ports:"
-    for PORT in "${PORTS[@]}"; do
+    for PORT in $PORTS; do
         echo "      - $PORT"
     done
 } > "$OUTPUT_FILE"
