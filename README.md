@@ -8,6 +8,7 @@ sinny's nginx unprivileged setup
 - [podman](https://github.com/containers/podman/) 📦 or [docker](https://docs.docker.com/engine/install/) (rootless supported for both)
 - [make](https://www.gnu.org/software/make/) 📦
 - [docker compose](https://github.com/docker/compose) 📦
+- access control lists ([ACL](https://wiki.archlinux.org/title/Access_Control_Lists)) 📦
 - a DNS provider capable of DNS-01 challenge (from [this list](https://github.com/acmesh-official/acme.sh/wiki/dnsapi))
 
 📦 - likely available as a package for your system

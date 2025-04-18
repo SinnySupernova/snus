@@ -11,5 +11,6 @@ fi
 
 setfacl -m g:${CERTS_GID}:r ./certs/acmed/acmed.toml
 setfacl -Rm g:${CERTS_GID}:rx ./certs/acmed/hooks
+mkdir -p ./certs/acmed/hook-logs
 setfacl -m g:${CERTS_GID}:rwx ./certs/acmed/hook-logs
 setfacl -Rdm u:$(id -u):rwx ./certs/acmed/hook-logs
