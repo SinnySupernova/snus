@@ -1,20 +1,18 @@
 # snus
 sinny's nginx unprivileged setup
 
-## Prerequisites
+## prerequisites
 
 - any sh-compatible shell (sh, bash, zsh, fish, etc.)
 - git 📦
 - [podman](https://github.com/containers/podman/) 📦 or [docker](https://docs.docker.com/engine/install/) (rootless supported for both)
-- [make](https://www.gnu.org/software/make/) 📦🐳
+- [make](https://www.gnu.org/software/make/) 📦
 - [docker compose](https://github.com/docker/compose) 📦
 - a DNS provider capable of DNS-01 challenge (from [this list](https://github.com/acmesh-official/acme.sh/wiki/dnsapi))
 
 📦 - likely available as a package for your system
 
-🐳 - can be used in docker, check the [_make in docker_](#make-in-docker) section
-
-## Quickstart
+## quickstart
 
 0. run `git clone --depth=1 && https://github.com/SinnySupernova/snus.git && cd snus` to clone the repository and cd into it
 1. run `make config` to copy the example config to the `config.toml` file
@@ -22,7 +20,7 @@ sinny's nginx unprivileged setup
 3. run `make init` to perform the initial setup
 4. run `make up` to launch everything
 
-## Commands
+## commands
 
 #### `make init`
 runs the setup scripts (update the repos and creates configs for all the tools used)
@@ -79,25 +77,11 @@ pulls updates from the [dockergen git repo](https://github.com/nginx-proxy/docke
 
 this runs automatically during `make init`
 
-## make in docker
-
-add this to your .bashrc, .zshrc or the equivalent for your shell:
-
-```sh
-make() {
-  docker run --rm \
-    -u "$(id -u):$(id -g)" \
-    -w /workdir \
-    -v "$(pwd)":/workdir \
-    alpine/make make "$@"
-}
-```
-
 then source the file or start a new shell and you should be able to run `make` in docker
 
 [this docker image](https://hub.docker.com/r/alpine/make) is used
 
-## License
+## license
 
     Copyright 2025 Sinny Supernova
 
