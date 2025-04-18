@@ -18,14 +18,15 @@ write_env() {
 make_path_explicit() {
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
-      /*) echo "$line" ;;
-      *) echo "./$line" ;;
+      /*) out="$line" ;;
+      *) out="./$line" ;;
     esac
-  done <<< "${1:-$(cat)}"
+    printf "%s\n" "$out" || exit 1
+  done
 }
 
 mkdir -p ./env
-rm ./env/.env.compose
+[ -f "./env/.env.compose" ] && rm ./env/.env.compose
 
 write_env NGINX_UID $(tq 'nginx.uid'< "$config_file")
 write_env NGINX_GID $(tq 'nginx.gid'< "$config_file")
