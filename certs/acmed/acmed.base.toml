@@ -1,0 +1,35 @@
+global.pk_file_mode = 640
+
+[[rate-limit]]
+name = "letsencrypt-staging"
+number = 60
+period = "1m"
+
+[[rate-limit]]
+name = "letsencrypt-prod"
+number = 5
+period = "1m"
+
+[[endpoint]]
+name = "letsencrypt-v2-staging"
+url = "https://acme-staging-v02.api.letsencrypt.org/directory"
+rate_limits = ["letsencrypt-staging"]
+tos_agreed = "LE_TOS_AGREED"
+
+[[endpoint]]
+name = "letsencrypt-v2-production"
+url = "https://acme-v02.api.letsencrypt.org/directory"
+rate_limits = ["letsencrypt-prod"]
+tos_agreed = "LE_TOS_AGREED"
+
+[[hook]]
+name = "acmesh-auth-dns-01-hook"
+type = ["challenge-dns-01"]
+cmd = "/etc/acmed/hooks/acmesh_auth.sh"
+args = ["{{ identifier }}", "{{ proof }}"]
+
+[[hook]]
+name = "acmesh-cleanup-dns-01-hook"
+type = ["challenge-dns-01-clean"]
+cmd = "/etc/acmed/hooks/acmesh_cleanup.sh"
+args = ["{{ identifier }}", "{{ proof }}"]

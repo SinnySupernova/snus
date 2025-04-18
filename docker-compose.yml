@@ -1,0 +1,187 @@
+# This file is not meant to be edited unless you know what you're doing.
+services:
+  nginx:
+    # https://github.com/nginxinc/docker-nginx-unprivileged
+    image: nginx-unprivileged:local
+    build:
+      context: "${NGINX_REPO_DIR:?error}/${NGINX_FLAVOR:?error}"
+      args:
+        UID: "${NGINX_UID:?error}"
+        GID: "${NGINX_GID:?error}"
+    pull_policy: build
+    cap_drop:
+      - ALL
+    container_name: nginx
+    depends_on:
+      init-volumes:
+        condition: service_completed_successfully
+    group_add:
+      - "${CERTS_GID:?error}"
+      - "${DOCKERGEN_GID:?error}"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      nginx_net:
+        ipv4_address: "${NGINX_CONTAINER_IP:?error}"
+    ports: [] # overridden
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    user: "${NGINX_UID:?error}:${NGINX_GID:?error}"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certs:/etc/nginx/certs:ro
+      - nginx-logs:/var/log/nginx
+
+  certs:
+    image: "acmed:local"
+    build:
+      context: "${ACMED_REPO_DIR:?error}"
+      dockerfile: ./acmed.Dockerfile
+      args:
+        TARGET: bookworm
+    pull_policy: build
+    cap_drop:
+      - ALL
+    command:
+      - "acmed"
+      - "--pid-file"
+      - "/etc/acmed/pid/acmed.pid"
+      - "--log-level"
+      - "debug"
+      # - "trace"
+      - "-f"
+      - "--log-stderr"
+    container_name: acmed
+    depends_on:
+      init-volumes:
+        condition: service_completed_successfully
+    init: true
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "${CERTS_UID:?error}:${CERTS_GID:?error}"
+    tmpfs:
+      - /tmp
+      - "/etc/acmed/pid:uid=${CERTS_UID:?error},gid=${CERTS_GID:?error},mode=700"
+    volumes:
+      - ./certs/acmed/acmed.toml:/etc/acmed/acmed.toml:ro
+      - acmed-accounts:/var/lib/acmed/accounts
+      - ./certs/acmed/hooks:/etc/acmed/hooks:ro
+      - "${ACMESH_REPO_DIR:?error}:/acmesh:ro"
+      - certs:/var/lib/acmed/certs
+      - ./certs/acmed/hook-logs:/hook-logs
+
+  docker-gen:
+    image: nginxproxy/docker-gen:local
+    build:
+      context: "${DOCKERGEN_REPO_DIR:?error}"
+      dockerfile: ./Dockerfile.alpine
+    pull_policy: build
+    cap_drop:
+      - ALL
+    command:
+      - "-notify-sighup"
+      - "nginx"
+      - "-watch"
+      - "-only-exposed"
+      # - "-keep-blank-lines"
+      - "-wait"
+      - "500ms:2s"
+      - "-endpoint"
+      - "tcp://dockerproxy:2375"
+      - "/etc/docker-gen/templates/nginx.tmpl" # template
+      - "/etc/nginx/conf.d/dockergen.conf" # target
+    container_name: docker-gen
+    depends_on:
+      dockerproxy:
+        condition: service_started
+      init-volumes:
+        condition: service_completed_successfully
+    environment:
+      HTTP_PORT: "8080"
+      ENABLE_HTTP_ON_MISSING_CERT: false
+      ENABLE_IPV6: true
+      TRUST_DOWNSTREAM_PROXY: false
+    init: true
+    networks:
+      - nginx_net
+      - docker-proxynet
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "${DOCKERGEN_UID:?error}:${DOCKERGEN_GID:?error}"
+    volumes:
+      - ./dockergen/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - certs:/etc/nginx/certs:ro
+
+  dockerproxy:
+    image: wollomatic/socket-proxy:1
+    cap_drop:
+      - ALL
+    command:
+      - "-loglevel=info"
+      - "-allowfrom=docker-gen"
+      - "-listenip=0.0.0.0"
+      - "-allowGET=/(list|info|networks|_ping|version|containers/.*|events.*)" # for docker-gen
+      - "-allowPOST=/containers/nginx/kill" # for docker-gen
+      - "-shutdowngracetime=5"
+      - "-watchdoginterval=600"
+      - "-stoponwatchdog"
+    mem_limit: 64M
+    networks:
+      - docker-proxynet
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "65534:${DOCKER_SOCK_GID:?error}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  init-volumes:
+    image: busybox
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    command:
+      - "sh"
+      - "-c"
+      - "chown ${CERTS_UID:?error}:${CERTS_GID:?error} /acmed-accounts && chown ${CERTS_UID:?error}:${CERTS_GID:?error} /certs && chown ${NGINX_UID:?error}:${NGINX_GID:?error} /nginx-logs"
+    network_mode: none
+    read_only: true
+    restart: no
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - acmed-accounts:/acmed-accounts
+      - certs:/certs
+      - nginx-logs:/nginx-logs
+
+networks:
+  nginx_net:
+    name: nginx_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "${NGINX_SUBNET:?error}"
+  docker-proxynet:
+    driver: bridge
+    internal: true
+
+volumes:
+  certs:
+    name: certs
+  acmed-accounts: {}
+  nginx-logs: {}

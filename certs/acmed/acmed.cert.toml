@@ -1,0 +1,9 @@
+[[certificate]]
+name = "CERT_NAME"
+endpoint = "letsencrypt-v2-LE_ENDPOINT"
+account = "CERT_ACCOUNT"
+identifiers = [
+    { dns = "CERT_DOMAIN", challenge = "dns-01", env = { dns_provider = "DNS_PROVIDER", PROVIDER_VARS = "" } },
+]
+hooks = ["acmesh-auth-dns-01-hook", "acmesh-cleanup-dns-01-hook"]
+file_name_format = "CERT_DOMAIN.{{ \"key\" if file_type == \"pk\" else file_type }}"

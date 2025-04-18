@@ -1,0 +1,574 @@
+{{- $globals := dict }}
+{{- $_ := set $globals "containers" $ }}
+{{- $_ := set $globals "Env" $.Env }}
+{{- $_ := set $globals "Docker" $.Docker }}
+{{- $_ := set $globals "NginxContainer" (where $globals.containers "Name" ($globals.Env.NGINX_CONTAINER_NAME | default "nginx") | first) }}
+
+{{- $config := dict }}
+{{- $_ := set $config "allow_published_addresses" ($globals.Env.ALLOW_PUBLISHED_ADDRESSES | default "false" | parseBool) }}
+{{- $_ := set $config "default_endpoint_ipv4" ($globals.Env.DEFAULT_ENDPOINT_IPV4 | default "https") }}
+{{- $_ := set $config "default_endpoint_ipv6" ($globals.Env.DEFAULT_ENDPOINT_IPV6 | default "https") }}
+{{- $_ := set $config "external_http_port" ($globals.Env.HTTP_PORT | default "80") }}
+{{- $_ := set $config "external_https_port" ($globals.Env.HTTPS_PORT | default "443") }}
+{{- $_ := set $config "listen_ipv4" ($globals.Env.LISTEN_IPV4 | default "true" | parseBool) }}
+{{- $_ := set $config "listen_ipv6" ($globals.Env.LISTEN_IPV6 | default "false" | parseBool) }}
+{{- $_ := set $config "default_is_tls" ($globals.Env.DEFAULT_IS_TLS | default "true" | parseBool) }}
+{{- $_ := set $config "enable_http2" ($globals.Env.ENABLE_HTTP2 | default "true" | parseBool) }}
+{{- $_ := set $config "enable_hsts" ($globals.Env.ENABLE_HSTS | default "true" | parseBool) }}
+{{- $_ := set $config "use_modern_tls" ($globals.Env.TLS_PROTOCOLS | default "false" | parseBool) }}
+
+
+{{- $_ := set $globals "config" $config }}
+
+{{- $_ := set $globals "networks" (dict) }}
+# Networks available to the container running nginx:
+{{- /*
+     * Note: $globals.NginxContainer may be nil if the container cannot be reached.
+     * See also: <https://github.com/nginx-proxy/docker-gen/issues/458>,
+     * <https://github.com/nginx-proxy/nginx-proxy/issues/2189>.
+     */}}
+{{- if $globals.NginxContainer }}
+    {{- range sortObjectsByKeysAsc $globals.NginxContainer.Networks "Name" }}
+        {{- $_ := set $globals.networks .Name . }}
+#     {{ .Name }}
+    {{- else }}
+#     (none)
+    {{- end }}
+{{- else }}
+# /!\ WARNING: Failed to find the Docker container running nginx.
+#              See also: <https://github.com/nginx-proxy/docker-gen/issues/458>
+#              and <https://github.com/nginx-proxy/nginx-proxy/issues/2189>.
+{{- end }}
+
+
+{{- /*
+     * Template used to merge updates into dict value
+     */}}
+{{- define "updDicItmField" }}
+    {{- $target := .target }}
+    {{- $key := .key }}
+    {{- $field := .field }}
+    {{- $value := .value }}
+
+    {{- if hasKey $target $key }}
+        {{- /* update existing */}}
+        {{- $existingValue := index $target $key }}
+        {{- if ne (index $existingValue $field) $value }}
+            {{- $updatedValue := dict $field $value }}
+            {{- $target = merge $target (dict $key (merge $existingValue $updatedValue)) }}
+        {{- end }}
+    {{- else }}
+        {{- $target = set $target $key (dict $field $value) }}
+    {{- end }}
+{{- end }}
+
+
+{{- /*
+     * Template that returns IP of the container to use in upstream
+     */}}
+{{- define "container_ip" }}
+    {{- $container := .container }}
+    {{- $nginxContainer := .nginxContainer }}
+
+    {{- $bridgeNet := dict }}
+
+    {{- /* check container labels for a network and try to use it  */}}
+    {{- $labelNetName := index $container.Labels "dockergen.network" }}
+    {{- if not (empty $labelNetName) }}
+        {{ $cLn := where $container.Networks "Name" $labelNetName | first }}
+        {{- if and $cLn (where $nginxContainer.Networks "Name" $labelNetName | first) }}
+            {{- $bridgeNet = $cLn }}
+        {{- end }}
+    {{- else }}
+        {{- /* check if this container has a common network with the nginx container  */}}
+        {{- range $idx, $nCn := $nginxContainer.Networks }}
+            {{- $net := where $container.Networks "Name" $nCn.Name | first }}
+            {{- if $net }}
+                {{- /* skip net "ingress" if container is in swarm mode */}}
+                {{- if and $container.Node (eq $nCn.Name "ingress") }}
+                    {{- continue }}
+                {{- end }}
+
+                {{- $bridgeNet = $net }}
+                {{- break }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+
+
+    {{- if not $bridgeNet }}
+        {{- if not (empty $labelNetName) }}
+#   net from label {{ $labelNetName }} is not connecting this container with nginx container
+        {{- else }}
+#   no common net with nginx container
+        {{- end }}
+    {{- else }}
+#   bridge net: {{ $bridgeNet.Name }}
+        {{- if eq (index $container.Labels "dockergen.upstream.use_ipv6") "true" }}
+            {{- $ipv6 := $bridgeNet.GlobalIPv6Address }}
+            {{- if not (empty $ipv6) }}
+                {{- $_ := set $ "ip" (printf "[%s]" $ipv6) }}
+            {{- else }}
+#   ipv6 requested but not available in this network
+            {{- end }}
+        {{- else }}
+            {{- $ipv4 := $bridgeNet.IP }}
+            {{- if not (empty $ipv4) }}
+                {{- $_ := set $ "ip" $ipv4 }}
+            {{- else }}
+                {{- $ipv6 := $bridgeNet.GlobalIPv6Address }}
+                {{- if not (empty $ipv6) }}
+#   ipv4 not available in this network, using ipv6
+                    {{- $_ := set $ "ip" (printf "[%s]" $ipv6) }}
+                {{- else }}
+#   neither ipv4 nor ipv6 are available in this network
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+
+{{- end }}
+
+{{- /*
+     * Template that transforms input endpoint to listen port
+     */}}
+{{- define "endpoint" }}
+    {{- $endpoint := .endpoint }}
+    {{- $isIpv6 := .isIpv6 }}
+    {{- $globals := .globals }}
+
+    {{- if not $endpoint }}
+        {{- if $isIpv6 }}
+            {{- $endpoint = $globals.config.default_endpoint_ipv6 }}
+        {{- else }}
+            {{- $endpoint = $globals.config.default_endpoint_ipv4 }}
+        {{- end }}
+#   using default endpoint {{ $endpoint }}
+    {{- end }}
+
+    {{- if eq $endpoint "http" }}
+        {{- $endpoint = $globals.config.external_http_port }}
+    {{- else if eq $endpoint "https" }}
+        {{- $endpoint = $globals.config.external_https_port }}
+    {{- end }}
+
+    {{- $_ := set . "listenPort" (atoi $endpoint) }}
+
+{{- end }}
+
+{{- /*
+     * Template that renders properly secure TLS policy
+     */}}
+{{- define "tls_policy" }}
+    {{- if .modern }}
+    # https://ssl-config.mozilla.org/#server=nginx&version=1.27.3&config=modern&openssl=3.4.0&guideline=5.7
+    ssl_protocols TLSv1.3;
+    ssl_ecdh_curve X25519:prime256v1:secp384r1;
+    ssl_prefer_server_ciphers off;
+    {{- else }}
+    # https://ssl-config.mozilla.org/#server=nginx&version=1.27.3&config=intermediate&openssl=3.4.0&guideline=5.7
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ecdh_curve X25519:prime256v1:secp384r1;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;
+    {{- end }}
+{{- end }}
+
+
+{{- $upstreamBlocks := dict }}
+{{- $serverBlocks := dict }}
+
+
+{{- /* comment_template */}}
+
+
+{{- /* Iterate over containers */}}
+{{- range $container := $globals.containers }}
+# === container {{ $container.Name }} ===
+
+    {{- if ne $container.State.Running true }}
+        {{ continue }}
+    {{- end }}
+
+# running
+
+    {{- if ne (index $container.Labels "dockergen.enable") "true" }}
+        {{ continue }}
+    {{- end }}
+
+# enabled
+
+    {{- $args := dict "nginxContainer" $globals.NginxContainer "container" $container }}
+    {{- template "container_ip" $args }}
+    {{- $containerIp := $args.ip }}
+# container ip: {{ $containerIp }}
+
+
+    {{- $routers := dict }}
+    {{- $services := dict }}
+
+    {{- range $key, $value := $container.Labels }}
+
+        {{- $split := split $key "." }}
+
+        {{- if (hasPrefix "dockergen.http.routers." $key) }}
+#   r-key: {{ $key }}
+            {{ $routerName := index $split 3 }}
+
+            {{- /* docker container IDs are alnum so a dash delimiter works */}}
+            {{ $routerKey := printf "%s-%s" $container.Name $routerName }}
+            {{- if and (eq (len $split) 5) (hasSuffix ".server_name" $key) }}
+                {{- $serverName := $value }}
+#   router {{ $routerName }} server_name: {{ $serverName }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServerName" "value" $serverName) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".endpoint" $key) }}
+                {{- $endpoint := $value }}
+#   router {{ $routerName }} endpoint: {{ $endpoint }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Endpoint" "value" $endpoint) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".cert_name" $key) }}
+                {{- $certName := $value }}
+#   router {{ $routerName }} cert_name: {{ $certName }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "CertName" "value" $certName) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".endpoint_ipv6" $key) }}
+                {{- $endpointIpv6 := $value }}
+#   router {{ $routerName }} endpoint_ipv6: {{ $endpointIpv6 }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "EndpointIPv6" "value" $endpointIpv6) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".tls" $key) }}
+                {{- $isTls := $value | parseBool }}
+#   router {{ $routerName }} isTls: {{ $isTls }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "IsTLS" "value" $isTls) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".path" $key) }}
+                {{- $path := $value }}
+#   router {{ $routerName }} path: {{ $path }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Path" "value" $path) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".service" $key) }}
+                {{- $serviceName := $value }}
+#   router {{ $routerName }} service: {{ $serviceName }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServiceName" "value" (printf "%s-%s" $container.Name $serviceName)) }}
+            {{- end }}
+
+        {{- else if (hasPrefix "dockergen.http.services." $key) }}
+#   s-key: {{ $key }}
+            {{ $serviceName := index (split $key ".") 3 }}
+
+            {{- /* docker container IDs are alnum so a dash delimiter works */}}
+            {{ $serviceKey := printf "%s-%s" $container.Name $serviceName }}
+            {{- if and (eq (len $split) 5) (hasSuffix ".port" $key) }}
+                {{- $port := atoi $value }}
+                {{- if eq $port 0 }}
+# /!\ WARNING: service {{ $serviceName }} oort {{ $value }} is invalid
+                {{- else }}
+#   service {{ $serviceName }} port: {{ $port }}
+                    {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "Port" "value" $port) }}
+                {{- end }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".scheme" $key) }}
+                {{- $scheme := $value }}
+#   service {{ $serviceName }} scheme: {{ $scheme }}
+                {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "Scheme" "value" $scheme) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".keepalive" $key) }}
+                {{- $keepalive := $value }}
+#   service {{ $serviceName }} keepalive: {{ $keepalive }}
+                {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "Keepalive" "value" $keepalive) }}
+            {{- end }}
+
+        {{- end }}
+
+    {{- end }}
+
+    {{- /* Compose upstream blocks */}}
+    {{- range $key, $value := $services }}
+        {{- $upBlock := dict "IP" $containerIp "Keepalive" $value.Keepalive }}
+        {{- $port := $value.Port }}
+        {{- if ne $port 0 }}
+            {{- $_ := merge $upBlock (dict "Port" $port) }}
+        {{- end }}
+    {{- $upBlock = set $upstreamBlocks $key $upBlock }}
+#   upstream {{ $key }} block {{ $upBlock }}
+    {{- end }}
+
+    {{- /* Compose server blocks */}}
+    {{- range $key, $value := $routers }}
+#   compose server binding for router {{ $key }}
+
+        {{- $listenPortIpv4 := 0 }}
+        {{- if or $globals.config.listen_ipv4 $value.Endpoint }}
+            {{- $args := dict "endpoint" $value.Endpoint "isIpv6" false "globals" $globals }}
+            {{- template "endpoint" $args }}
+            {{- $listenPortIpv4 = $args.listenPort }}
+            {{- if eq $listenPortIpv4 0 }}
+# Error: ipv4 endpoint {{ $value.Endpoint }} is not "http", "https" or a number
+                {{- continue }}
+            {{- end }}
+        {{- end }}
+#   ipv4 listen port: {{ $listenPortIpv4 }}
+
+        {{- $listenPortIpv6 := 0 }}
+        {{- if or $globals.config.listen_ipv6 $value.EndpointIPv6 }}
+            {{- $args := dict "endpoint" $value.EndpointIPv6 "isIpv6" true "globals" $globals }}
+            {{- template "endpoint" $args }}
+            {{- $listenPortIpv6 = $args.listenPort }}
+            {{- if eq $listenPortIpv6 0 }}
+# Error: ipv6 endpoint {{ $value.EndpointIPv6 }} is not "http", "https" or a number
+                {{- continue }}
+            {{- end }}
+        {{- end }}
+#   ipv6 listen port: {{ $listenPortIpv6 }}
+
+        {{- if and (eq $listenPortIpv4 0) (eq $listenPortIpv6 0) }}
+# Error: no valid endpoints
+            {{- continue }}
+        {{- end }}
+
+        {{- $isTls := $value.IsTLS | default $globals.config.default_is_tls }}
+        {{- $certCrt := "" }}
+        {{- $certKey := "" }}
+        {{- if $isTls }}
+#   checking TLS certs
+
+            {{- $cert := $value.CertName }}
+            {{- if not $cert }}
+#   using server name as cert name: {{ $value.ServerName }}
+                {{- $cert = $value.ServerName }}
+            {{- end }}
+
+            {{- if exists (printf "/etc/nginx/certs/%s.crt" $cert) }}
+                {{- $certCrt = printf "/etc/nginx/certs/%s.crt" $cert }}
+            {{- else if exists (printf "/etc/nginx/certs/%s.crt.pem" $cert) }}
+                {{- $certCrt = printf "/etc/nginx/certs/%s.crt.pem" $cert }}
+            {{- end }}
+
+            {{- if exists (printf "/etc/nginx/certs/%s.key" $cert) }}
+                {{- $certKey = printf "/etc/nginx/certs/%s.key" $cert }}
+            {{- else if exists (printf "/etc/nginx/certs/%s.key.pem" $cert) }}
+                {{- $certKey = printf "/etc/nginx/certs/%s.key.pem" $cert }}
+            {{- else if exists (printf "/etc/nginx/certs/%s.pk.pem" $cert) }}
+                {{- $certKey = printf "/etc/nginx/certs/%s.pk.pem" $cert }}
+            {{- end }}
+
+            {{- if and (empty $certCrt) (empty $certKey) }}
+# Error: TLS certs cannot be found. Exist: crt = {{ not (empty $certCrt) }}, key = {{ not (empty $certKey) }}
+                {{- continue }}
+            {{- end }}
+
+        {{- end }}
+
+
+        {{- $sbKey := printf "%s-%d-%d" $value.ServerName $listenPortIpv4 $listenPortIpv6 }}
+#   server block key: {{ $sbKey }}
+
+        {{- $path := $value.Path | default "/" }}
+
+
+        {{- $upstreamName := $value.ServiceName | default $key }}
+#   upstream name : {{ $upstreamName }}
+
+        {{- $service := index $services $upstreamName }}
+        {{- $scheme := "http" }}
+        {{- if not $service }}
+            {{- if eq $upstreamName $key }}
+#   creating implicit service {{ $upstreamName }} for router {{ $key }}
+                {{- $service = set $services $upstreamName (dict "IP" $containerIp)}}
+            {{- else }}
+# Error: service {{ $upstreamName }} doesn't exist for router {{ $key }}
+                {{- continue }}
+            {{- end }}
+        {{- else }}
+            {{- if $service.Scheme }}
+                {{- $scheme := $service.Scheme }}
+            {{- end }}
+        {{- end }}
+
+        {{- if not $service }}
+# Debug: sanity check - service {{ $upstreamName }} doesn't exist
+            {{- continue }}
+        {{- end }}
+
+
+        {{ $port := $service.Port }}
+        {{- if empty $port }}
+            {{- $firstExposedPort := (first $container.Addresses).Port | default "" }}
+            {{- if not (empty $firstExposedPort) }}
+#       implicit port {{ $firstExposedPort }} (first exposed)
+                {{- $port = $firstExposedPort }}
+                {{- template "updDicItmField" (dict "target" $services "key" $upstreamName "field" "Port" "value" $port) }}
+#   creating implicit upstream {{ $upstreamName }} ip {{ $containerIp }} port {{ $port }}
+                {{- $_ := set $upstreamBlocks $key (dict "IP" $containerIp "Port" $port) }}
+            {{- else }}
+# Error: router {{ $key }} doesn't have any exposed ports, can't implicitly choose the first one
+                {{- continue }}
+            {{- end }}
+        {{- end }}
+
+        {{- /* check if port is exposed */}}
+        {{- $exposedPortAddress := where $container.Addresses "Port" (toString $port) | first }}
+        {{- if not $exposedPortAddress }}
+# Error: service {{ $upstreamName }} port {{ $port }} is not exposed for router {{ $key }}
+            {{ $upstreamBlocks = unset $upstreamBlocks $upstreamName }}
+            {{- continue }}
+        {{- end }}
+
+        {{- /* warn/err for published addresses */}}
+        {{- if not (empty $exposedPortAddress.HostPort) }}
+            {{- if $globals.config.allow_published_addresses }}
+# /!\ WARNING: Virtual port published on host to {{ $exposedPortAddress.HostPort }}.
+#              Clients might be able to bypass the proxy and access the container directly.
+            {{- else }}
+# Error: service {{ $upstreamName }} port is published to {{ $exposedPortAddress.HostPort }}
+                {{ $upstreamBlocks = unset $upstreamBlocks $upstreamName }}
+                {{- continue }}
+            {{- end }}
+        {{- end }}
+
+
+        {{- $newLocation := dict "Path" $path "Scheme" $scheme "UpstreamName" $upstreamName }}
+# new location {{ $path }} up {{ $upstreamName }}
+
+
+        {{- if hasKey $serverBlocks $sbKey }}
+            {{- $existingBlock := index $serverBlocks $sbKey }}
+            {{- $locations := index $existingBlock "Locations" }}
+
+            {{- $duplicateLocation := where $locations "Path" $newLocation.Path | first }}
+            {{- if $duplicateLocation }}
+# Error: router {{ $key }} has duplicate path declared {{ $newLocation.Path }}. This should be impossible but here we are
+                {{- continue }}
+            {{- end }}
+
+            {{- $updatedLocations := append $locations $newLocation }}
+            {{- $updatedBlock := set $existingBlock "Locations" $updatedLocations }}
+#   server {{ $sbKey }} upd block {{ $updatedBlock }}
+            {{- $serverBlocks = merge $serverBlocks (dict $sbKey $updatedBlock) }}
+        {{- else }}
+            {{- $newBlock := dict "ServerName" $value.ServerName }}
+            {{- $newBlock = set $newBlock "IsTLS" $isTls }}
+            {{- if $isTls }}
+                {{- $newBlock = set $newBlock "TlsCertCrt" $certCrt }}
+                {{- $newBlock = set $newBlock "TlsCertkey" $certKey }}
+            {{- end }}
+            {{- $newBlock = set $newBlock "ListenPortIPv4" $listenPortIpv4 }}
+            {{- $newBlock = set $newBlock "ListenPortIPv6" $listenPortIpv6 }}
+            {{- $newBlock = set $newBlock "Locations" (list $newLocation) }}
+#   server {{ $sbKey }} data {{ $newBlock }}
+            {{- $serverBlocks = merge $serverBlocks (dict $sbKey $newBlock) }}
+        {{- end }}
+
+    {{- end }}
+
+
+{{- end }}
+
+
+{{- /* the following block was shamelessly copied from:
+     * https://github.com/nginx-proxy/nginx-proxy/blob/main/nginx.tmpl
+     */}}
+{{- /* If the request from the downstream client has an "Upgrade:" header (set to any
+     * non-empty value), pass "Connection: upgrade" to the upstream (backend) server.
+     * Otherwise, the value for the "Connection" header depends on whether the user
+     * has enabled keepalive to the upstream server.
+     */}}
+map $http_upgrade $proxy_connection {
+    default upgrade;
+    '' $proxy_connection_noupgrade;
+}
+map $upstream_keepalive $proxy_connection_noupgrade {
+    # Preserve nginx's default behavior (send "Connection: close").
+    default close;
+    # Use an empty string to cancel nginx's default behavior.
+    true '';
+}
+{{- /*
+     * Abuse the map directive (see <https://stackoverflow.com/q/14433309>) to ensure
+     * that $upstream_keepalive is always defined.  This is necessary because:
+     * - The $proxy_connection variable is indirectly derived from
+     * $upstream_keepalive, so $upstream_keepalive must be defined whenever
+     * $proxy_connection is resolved.
+     * - The $proxy_connection variable is used in a proxy_set_header directive in
+     * the http block, so it is always fully resolved for every request -- even
+     * those where proxy_pass is not used (e.g., unknown virtual host).
+     */}}
+map "" $upstream_keepalive {
+    # The value here should not matter because it should always be overridden in
+    # a location block (see the "location" template) for all requests where the
+    # value actually matters.
+    default false;
+}
+
+
+{{- /* Render the upstream blocks */}}
+{{- range $key, $upBlock := $upstreamBlocks }}
+upstream {{ $key }} {
+    server {{ $upBlock.IP }}:{{ $upBlock.Port }};
+    {{- $keepalive := dict }}
+    {{- if $upBlock.Keepalive }}
+        {{- $keepalive = $upBlock.Keepalive }}
+    {{- else }}
+        {{- $keepalive = "auto" }}
+    {{- end }}
+    {{- if ne $keepalive "disabled" }}
+        {{- if eq $keepalive "auto" }}
+    keepalive 2;
+        {{- else }}
+            {{- if gt (atoi $keepalive) 0 }}
+    keepalive {{ $keepalive }};
+            {{- else }}
+# Error: invalid keepalive value '{{ $keepalive }}'
+            {{- end }}
+        {{- end }}
+    {{- end }}
+}
+{{- end }}
+
+{{- /* Render the server blocks */}}
+{{- range $key, $block := $serverBlocks }}
+server {
+    server_name {{ $block.ServerName }};
+
+    {{- $tlsString := "" }}
+    {{- if $block.IsTLS }}
+        {{- $tlsString = " ssl" }}
+
+        {{- if $globals.config.enable_http2 }}
+    http2 on;
+        {{- end }}
+
+    {{- template "tls_policy" (dict "modern" $globals.config.use_modern_tls) }}
+
+    ssl_certificate $block.TlsCrtFile;
+    ssl_certificate_key $block.TlsKeyFile;
+
+        {{- if $globals.config.enable_hsts }}
+    # HSTS (ngx_http_headers_module is required) (63072000 seconds)
+    add_header Strict-Transport-Security "max-age=63072000" always;
+        {{- end }}
+    {{- end }}
+
+
+    {{- if $block.ListenPortIpv4 }}
+    listen {{ $block.ListenPortIpv4 }}{{ $tlsString}};
+    {{- end }}
+    {{- if $block.ListenPortIpv6 }}
+    listen [::]:{{ $block.ListenPortIpv6 }}{{ $tlsString}};
+    {{- end }}
+
+
+    {{- range $location := $block.Locations }}
+    location {{ $location.Path }} {
+
+        proxy_http_version 1.1;
+
+        proxy_pass {{ $location.Scheme }}://{{ $location.UpstreamName }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        {{- $upstreamKeepalive := get (get $upstreamBlocks $location.UpstreamName) "Keepalive" }}
+        set $upstream_keepalive {{ if ne $upstreamKeepalive "disabled" }}true{{ else }}false{{ end }};
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $proxy_connection;
+
+    }
+    {{- end }}
+}
+{{- end }}
