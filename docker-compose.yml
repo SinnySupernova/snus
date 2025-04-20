@@ -71,14 +71,14 @@ services:
     user: "${CERTS_UID:?error}:${CERTS_GID:?error}"
     tmpfs:
       - /tmp
-      - "/etc/acmed/pid:uid=${CERTS_UID:?error},gid=${CERTS_GID:?error},mode=700"
     volumes:
+      - acmed-pid:/etc/acmed/pid
       - ./certs/acmed/acmed.toml:/etc/acmed/acmed.toml:ro
       - acmed-accounts:/var/lib/acmed/accounts
       - ./certs/acmed/hooks:/etc/acmed/hooks:ro
+      - ./certs/acmed/hook-logs:/hook-logs
       - "${ACMESH_REPO_DIR:?error}:/acmesh:ro"
       - certs:/var/lib/acmed/certs
-      - ./certs/acmed/hook-logs:/hook-logs
 
   docker-gen:
     image: nginxproxy/docker-gen:local
@@ -184,4 +184,9 @@ volumes:
   certs:
     name: certs
   acmed-accounts: {}
+  acmed-pid:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: uid=${CERTS_UID:?error},gid=${CERTS_GID:?error},mode=0700
   nginx-logs: {}
