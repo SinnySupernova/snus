@@ -1,8 +1,10 @@
 #!/bin/sh
 
+set -eu
+
 log_file=/hook-logs/acmesh.log
 
-echo "domain: $1" >> $log_file
+echo "dns auth for domain: $1" >> $log_file
 echo "dns provider: $dns_provider" >> $log_file
 
 wildcard=$1
@@ -24,15 +26,18 @@ acmesh_path="/acmesh"
 
 # wait for propagation
 max_wait=900
-interval=60
+interval=20
 elapsed=0
 
 while [ $elapsed -lt $max_wait ]; do
     if dig +short TXT "${acme}.${dom}" | grep -q "\"${proof}\""; then
-        # echo "DNS propagation detected."
-        break
+        echo "DNS propagation detected." >> $log_file
+        exit 0
     fi
-    # echo "Waiting for DNS propagation... (${elapsed}/${max_wait}s)"
+    echo "Waiting for DNS propagation... (${elapsed}/${max_wait}s)" >> $log_file
     sleep $interval
     elapsed=$((elapsed + interval))
 done
+
+echo "DNS propagation failed after ${max_wait}s. Aborting" >> $log_file
+exit 1
