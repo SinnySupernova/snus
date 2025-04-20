@@ -189,10 +189,12 @@ networks:
 volumes:
   certs:
     name: certs
-  acmed-accounts: {}
+  acmed-accounts:
+    name: acmed-accounts
   acmed-pid:
     driver_opts:
       type: tmpfs
       device: tmpfs
       o: uid=${CERTS_UID:?error},gid=${CERTS_GID:?error},mode=0700
-  nginx-logs: {}
+  nginx-logs:
+    name: nginx-logs
