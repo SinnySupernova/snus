@@ -37,6 +37,7 @@ services:
     tmpfs:
       - /tmp
     user: "${NGINX_UID:?error}:${NGINX_GID:?error}"
+    userns_mode: keep-id
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - certs:/etc/nginx/certs:ro
@@ -71,6 +72,7 @@ services:
     security_opt:
       - no-new-privileges:true
     user: "${CERTS_UID:?error}:${CERTS_GID:?error}"
+    userns_mode: keep-id
     tmpfs:
       - /tmp
     volumes:
@@ -122,6 +124,7 @@ services:
     security_opt:
       - no-new-privileges:true
     user: "${DOCKERGEN_UID:?error}:${DOCKERGEN_GID:?error}"
+    userns_mode: keep-id
     volumes:
       - ./dockergen/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl:ro
       - ./nginx/conf.d:/etc/nginx/conf.d
