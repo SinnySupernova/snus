@@ -21,6 +21,18 @@ sinny's nginx unprivileged setup
 3. run `make init` to perform the initial setup
 4. run `make up` to launch everything
 
+## updating
+
+0. cd into the project directory
+1. run `git fetch` to check for updates, skip the following steps if no update is found
+2. run `make down` to bring the stack down
+3. run `git pull` to download the updates
+4. run `make init` to reconfigure everything
+5. run `make up` to bring everything up again
+
+> [!WARNING]
+> order matters, you must to bring the stack down with old parameters before the reconfiguration to avoid broken state issues
+
 ## commands
 
 #### `make init`
@@ -72,7 +84,7 @@ pulls updates from the [acmed git repo](https://github.com/breard-r/acmed)
 
 this runs automatically during `make init`
 
-#### update-dockergen
+#### `make update-dockergen`
 
 pulls updates from the [dockergen git repo](https://github.com/nginx-proxy/docker-gen)
 
