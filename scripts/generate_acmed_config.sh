@@ -37,7 +37,7 @@ cat "$temp_file" | while IFS= read -r line; do
     # echo "Domain: $CERT_DOMAIN"
     ACCOUNT_EMAIL=$(echo "$decoded_line" | jq  -r ".letsencrypt_email")
     LE_ENDPOINT=$(echo "$decoded_line" | jq  -r ".endpoint")
-    HASH=$(echo "$CERT_DOMAINS" | sha256sum | cut -c1-8)
+    HASH=$(echo "$CERT_DOMAINS-$LE_ENDPOINT" | sha256sum | cut -c1-8)
     ACCOUNT_NAME="$ACCOUNT_EMAIL-$HASH"
     # echo "Account: $ACCOUNT_NAME"
     CERT_NAME="$CERT_DOMAIN-$HASH"
@@ -47,10 +47,9 @@ cat "$temp_file" | while IFS= read -r line; do
 
     sed -e "s/ACCOUNT_EMAIL/$ACCOUNT_EMAIL/g" \
         -e "s/ACCOUNT_NAME/$ACCOUNT_NAME/g" \
-        ./certs/acmed/acmed.account.toml | base64 >>"$temp_acc"
+        ./certs/acmed/acmed.account.toml | base64 >> "$temp_acc"
 
     sed -e "s/CERT_NAME/$CERT_NAME/g" \
-        -e "s/CERT_DOMAINS/$CERT_DOMAINS/g" \
         -e "s/DNS_PROVIDER/$DNS_PROVIDER/g" \
         -e "s/CERT_DOMAIN/$CERT_DOMAIN/g" \
         -e "s/CERT_ACCOUNT/$ACCOUNT_NAME/g" \
