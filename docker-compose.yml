@@ -146,6 +146,7 @@ services:
     security_opt:
       - no-new-privileges:true
     user: "65534:${DOCKER_SOCK_GID:?error}"
+    userns_mode: keep-id
     volumes:
       - ${DOCKER_SOCK_PATH:?error}:/var/run/docker.sock:ro
 
