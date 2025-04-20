@@ -15,11 +15,15 @@ dom=${wildcard#"*."}
 
 acmesh_path="/acmesh"
 
+set +u
+
 # source acme.sh
 . "${acmesh_path}/acme.sh" > /dev/null
 
 # source the dns api
 . "${acmesh_path}/dnsapi/${dns_provider}.sh" > /dev/null
+
+set -u
 
 # add record
 "${dns_provider}_add" "${acme}.${dom}" "${proof}" >> $log_file 2>&1
