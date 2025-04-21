@@ -15,6 +15,12 @@ acmesh_path="/acmesh"
 # source acme.sh
 . "${acmesh_path}/acme.sh" > /dev/null
 
+# nullify some annoying acmesh functions
+_savedomainconf() { :; }
+_saveaccountconf_mutable() { :; }
+_clearaccountconf_mutable() { :; }
+_clearaccountconf() { :; }
+
 # source the dns api
 . "${acmesh_path}/dnsapi/${dns_provider}.sh" > /dev/null
 
