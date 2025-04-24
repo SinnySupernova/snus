@@ -331,21 +331,38 @@
                 {{- $cert = $value.ServerName }}
             {{- end }}
 
-            {{- if exists (printf "/etc/nginx/certs/%s.crt" $cert) }}
-                {{- $certCrt = printf "/etc/nginx/certs/%s.crt" $cert }}
-            {{- else if exists (printf "/etc/nginx/certs/%s.crt.pem" $cert) }}
-                {{- $certCrt = printf "/etc/nginx/certs/%s.crt.pem" $cert }}
-            {{- end }}
+            {{- /* Define base names to try (normal, staging, production) */ -}}
+            {{- $bases := list $cert (printf "%s-staging" $cert) (printf "%s-production" $cert) -}}
 
-            {{- if exists (printf "/etc/nginx/certs/%s.key" $cert) }}
-                {{- $certKey = printf "/etc/nginx/certs/%s.key" $cert }}
-            {{- else if exists (printf "/etc/nginx/certs/%s.key.pem" $cert) }}
-                {{- $certKey = printf "/etc/nginx/certs/%s.key.pem" $cert }}
-            {{- else if exists (printf "/etc/nginx/certs/%s.pk.pem" $cert) }}
-                {{- $certKey = printf "/etc/nginx/certs/%s.pk.pem" $cert }}
-            {{- end }}
+            {{- /* Define CRT and KEY extensions to try */ -}}
+            {{- $crtExts := list ".crt" ".crt.pem" "-staging.pk" "-staging.pk.pem" "-production.pk" "-production.pk.pem" -}}
+            {{- $keyExts := list ".key" ".key.pem" ".pk.pem" "-staging.pk" "-staging.pk.pem" "-production.pk" "-production.pk.pem" -}}
 
-            {{- if and (empty $certCrt) (empty $certKey) }}
+            {{- $certCrt := "" -}}
+            {{- range $b := $bases -}}
+            {{- if eq $certCrt "" -}}
+                {{- range $ext := $crtExts -}}
+                {{- $path := printf "/etc/nginx/certs/%s%s" $b $ext -}}
+                {{- if exists $path -}}
+                    {{- $certCrt = $path -}}
+                {{- end -}}
+                {{- end -}}
+            {{- end -}}
+            {{- end -}}
+
+            {{- $certKey := "" -}}
+            {{- range $b := $bases -}}
+            {{- if eq $certKey "" -}}
+                {{- range $ext := $keyExts -}}
+                {{- $path := printf "/etc/nginx/certs/%s%s" $b $ext -}}
+                {{- if exists $path -}}
+                    {{- $certKey = $path -}}
+                {{- end -}}
+                {{- end -}}
+            {{- end -}}
+            {{- end -}}
+
+            {{- if or (empty $certCrt) (empty $certKey) }}
 # Error: TLS certs cannot be found. Exist: crt = {{ not (empty $certCrt) }}, key = {{ not (empty $certKey) }}
                 {{- continue }}
             {{- end }}

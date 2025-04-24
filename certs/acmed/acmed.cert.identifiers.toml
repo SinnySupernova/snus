@@ -1,0 +1,4 @@
+[[certificate.identifiers]]
+dns = "CERT_DOMAIN"
+challenge = "dns-01"
+env.dns_provider = "DNS_PROVIDER"

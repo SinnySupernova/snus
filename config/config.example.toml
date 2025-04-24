@@ -23,17 +23,16 @@ ports = [
 
 # create certificates, a block per certificate you want
 [[certificate]]
-# domains that the certificate covers, wildcards supported
-# domains = ["*.example.com", "example.com"] # this covers example.com and all its subdomains
+# list of domains (SANs) this certificate covers, wildcards allowed
 domains = ["*.example.com", "example.com"]
 # letsencrypt account email for this certificate
 letsencrypt_email = "your+certs@email.com"
-# specify your DNS provider from the list: https://github.com/acmesh-official/acme.sh/wiki/dnsapi
+# DNS provider used for DNS-01 challenge (see: https://github.com/acmesh-official/acme.sh/wiki/dnsapi)
 dns_provider = "dns_cf"
-# use "staging" for testing and "production" for production, different rate limits apply
+# use "staging" for testing and "production" for real certificates, different rate limits apply
 endpoint = "staging"
 [certificate.dns_env]
-# add credentials for the provider (https://github.com/acmesh-official/acme.sh/wiki/dnsapi)
+# credentials for the DNS provider (see: https://github.com/acmesh-official/acme.sh/wiki/dnsapi)
 CF_Token = "Y_yourCloudflareTokenGoesIntoThisEnvVarX"
 
 # # second certificate example

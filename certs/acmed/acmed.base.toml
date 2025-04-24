@@ -33,3 +33,9 @@ name = "acmesh-cleanup-dns-01-hook"
 type = ["challenge-dns-01-clean"]
 cmd = "/etc/acmed/hooks/acmesh_cleanup.sh"
 args = ["{{ identifier }}", "{{ proof }}"]
+
+[[hook]]
+name = "post-op"
+type = ["post-operation"]
+cmd = "/etc/acmed/hooks/post_op.sh"
+args = ["{{ is_success }}", "{{ identifiers }}"]
