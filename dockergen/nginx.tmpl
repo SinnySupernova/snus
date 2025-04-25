@@ -332,7 +332,14 @@
             {{- end }}
 
             {{- /* Define base names to try (normal, staging, production) */ -}}
-            {{- $bases := list $cert (printf "%s-staging" $cert) (printf "%s-production" $cert) -}}
+            {{- $bases := list
+                $cert
+                (printf "%s-staging" $cert)
+                (printf "%s-production" $cert)
+                (printf "*.%s" $cert)
+                (printf "*.%s-staging" $cert)
+                (printf "*.%s-production" $cert)
+            -}}
 
             {{- /* Define CRT and KEY extensions to try */ -}}
             {{- $crtExts := list ".crt" ".crt.pem" "-staging.pk" "-staging.pk.pem" "-production.pk" "-production.pk.pem" -}}
