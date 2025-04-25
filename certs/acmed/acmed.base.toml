@@ -1,4 +1,4 @@
-global.pk_file_mode = 640
+global.pk_file_mode = 0o640
 
 [[rate-limit]]
 name = "letsencrypt-staging"
