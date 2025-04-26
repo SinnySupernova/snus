@@ -64,7 +64,6 @@ cat "$temp_file" | while IFS= read -r line; do
     sed -e "s/CERT_NAME/$CERT_NAME/g" \
         -e "s/LE_ENDPOINT/$LE_ENDPOINT/g" \
         -e "s/CERT_ACCOUNT/$ACCOUNT_NAME/g" \
-        -e "s/CERT_FILENAME/$CERT_NAME/g" \
         ./certs/acmed/acmed.cert.toml >> "$temp_temp_cert"
     for CERT_DOMAIN in $CERT_DOMAINS; do
         {

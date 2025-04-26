@@ -3,4 +3,4 @@ name = "CERT_NAME"
 endpoint = "letsencrypt-v2-LE_ENDPOINT"
 account = "CERT_ACCOUNT"
 hooks = ["acmesh-auth-dns-01-hook", "acmesh-cleanup-dns-01-hook", "post-op"]
-file_name_format = "CERT_FILENAME.{{ \"key\" if file_type == \"pk\" else file_type }}"
+file_name_format = "{{ name }}.{{ ext }}"
