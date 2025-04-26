@@ -200,6 +200,10 @@
 
     {{- $args := dict "nginxContainer" $globals.NginxContainer "container" $container }}
     {{- template "container_ip" $args }}
+    {{- if not $args.ip }}
+# Error: container ip cannot be determined
+        {{ continue }}
+    {{- end }}
     {{- $containerIp := $args.ip }}
 # container ip: {{ $containerIp }}
 
