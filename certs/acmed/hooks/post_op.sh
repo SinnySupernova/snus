@@ -26,13 +26,14 @@ rebuild_symlinks() {
             [ -e "$file" ] || continue
             [ -L "$file" ] && continue
 
-            filename=$(basename "$file") # e.g. aaa+bbb.crt
-            base="${filename%.$ext}" # e.g. aaa+bbb
+            filename=$(basename "$file") # aaa+bbb-endpoint.ext
+            domains=${filename%-*}    # aaa+bbb
+            suffix=${filename##*-}    # endpoint.ext
 
             old_IFS=$IFS
             IFS='+'
-            for domain in $base; do
-                ln -sf "$filename" "$CERT_DIR/$domain.$ext"
+            for domain in $domains; do
+                ln -sf "$filename" "$CERT_DIR/${domain}-${suffix}" # aaa-endpoint.ext
             done
             IFS=$old_IFS
         done
