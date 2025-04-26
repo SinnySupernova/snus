@@ -1,4 +1,4 @@
-FROM rust:1.82-slim AS builder
+FROM rust@sha256:7b65306dd21304f48c22be08d6a3e41001eef738b3bd3a5da51119c802321883 AS builder
 WORKDIR /workspace
 RUN rustup target add x86_64-unknown-linux-musl
 RUN cargo install --target=x86_64-unknown-linux-musl tomlq
