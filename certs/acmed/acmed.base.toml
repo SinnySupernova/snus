@@ -1,6 +1,8 @@
 [global]
 pk_file_mode = 0o640
 pk_file_ext = "key"
+cert_file_mode = 0o640
+cert_file_ext = "crt"
 
 [[rate-limit]]
 name = "letsencrypt-staging"
