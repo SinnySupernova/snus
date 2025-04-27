@@ -26,7 +26,8 @@
      * Note: $globals.NginxContainer may be nil if the container cannot be reached.
      * See also: <https://github.com/nginx-proxy/docker-gen/issues/458>,
      * <https://github.com/nginx-proxy/nginx-proxy/issues/2189>.
-     */}}
+     */
+-}}
 {{- if $globals.NginxContainer }}
     {{- range sortObjectsByKeysAsc $globals.NginxContainer.Networks "Name" }}
         {{- $_ := set $globals.networks .Name . }}
@@ -43,7 +44,8 @@
 
 {{- /*
      * Template used to merge updates into dict value
-     */}}
+     */
+-}}
 {{- define "updDicItmField" }}
     {{- $target := .target }}
     {{- $key := .key }}
@@ -51,7 +53,7 @@
     {{- $value := .value }}
 
     {{- if hasKey $target $key }}
-        {{- /* update existing */}}
+        {{- /* update existing */ -}}
         {{- $existingValue := index $target $key }}
         {{- if ne (index $existingValue $field) $value }}
             {{- $updatedValue := dict $field $value }}
@@ -65,14 +67,15 @@
 
 {{- /*
      * Template that returns IP of the container to use in upstream
-     */}}
+     */
+-}}
 {{- define "container_ip" }}
     {{- $container := .container }}
     {{- $nginxContainer := .nginxContainer }}
 
     {{- $bridgeNet := dict }}
 
-    {{- /* check container labels for a network and try to use it  */}}
+    {{- /* check container labels for a network and try to use it  */ -}}
     {{- $labelNetName := index $container.Labels "dockergen.network" }}
     {{- if not (empty $labelNetName) }}
         {{ $cLn := where $container.Networks "Name" $labelNetName | first }}
@@ -80,11 +83,11 @@
             {{- $bridgeNet = $cLn }}
         {{- end }}
     {{- else }}
-        {{- /* check if this container has a common network with the nginx container  */}}
+        {{- /* check if this container has a common network with the nginx container  */ -}}
         {{- range $idx, $nCn := $nginxContainer.Networks }}
             {{- $net := where $container.Networks "Name" $nCn.Name | first }}
             {{- if $net }}
-                {{- /* skip net "ingress" if container is in swarm mode */}}
+                {{- /* skip net "ingress" if container is in swarm mode */ -}}
                 {{- if and $container.Node (eq $nCn.Name "ingress") }}
                     {{- continue }}
                 {{- end }}
@@ -131,7 +134,8 @@
 
 {{- /*
      * Template that transforms input endpoint to listen port
-     */}}
+     */
+-}}
 {{- define "endpoint" }}
     {{- $endpoint := .endpoint }}
     {{- $isIpv6 := .isIpv6 }}
@@ -177,12 +181,10 @@
 
 {{- $upstreamBlocks := dict }}
 {{- $serverBlocks := dict }}
+{{- $sslPrereadEntries := dict }}
 
 
-{{- /* comment_template */}}
-
-
-{{- /* Iterate over containers */}}
+{{- /* iterate over containers */ -}}
 {{- range $container := $globals.containers }}
 # === container {{ $container.Name }} ===
 
@@ -241,6 +243,10 @@
                 {{- $isTls := $value | parseBool }}
 #   router {{ $routerName }} isTls: {{ $isTls }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "IsTLS" "value" $isTls) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".tls_passthrough" $key) }}
+                {{- $isTlsPassthrough := $value | parseBool }}
+#   router {{ $routerName }} isTlsPassthrough: {{ $isTlsPassthrough }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "IsTlsPassthrough" "value" $isTlsPassthrough) }}
             {{- else if and (eq (len $split) 5) (hasSuffix ".path" $key) }}
                 {{- $path := $value }}
 #   router {{ $routerName }} path: {{ $path }}
@@ -279,7 +285,7 @@
 
     {{- end }}
 
-    {{- /* Compose upstream blocks */}}
+    {{- /* compose upstream blocks */ -}}
     {{- range $key, $value := $services }}
         {{- $upBlock := dict "IP" $containerIp "Keepalive" $value.Keepalive }}
         {{- $port := $value.Port }}
@@ -290,7 +296,7 @@
 #   upstream {{ $key }} block {{ $upBlock }}
     {{- end }}
 
-    {{- /* Compose server blocks */}}
+    {{- /* compose server blocks */ -}}
     {{- range $key, $value := $routers }}
 #   compose server binding for router {{ $key }}
 
@@ -335,7 +341,7 @@
                 {{- $cert = $value.ServerName }}
             {{- end }}
 
-            {{- /* Define base names to try (normal, staging, production) */ -}}
+            {{- /* define filename suffixes to try */ -}}
             {{- $bases := list
                 $cert
                 (printf "%s-staging" $cert)
@@ -345,32 +351,38 @@
                 (printf "*.%s-production" $cert)
             -}}
 
-            {{- /* Define CRT and KEY extensions to try */ -}}
-            {{- $crtExts := list ".crt" ".crt.pem" "-staging.pk" "-staging.pk.pem" "-production.pk" "-production.pk.pem" -}}
-            {{- $keyExts := list ".key" ".key.pem" ".pk.pem" "-staging.pk" "-staging.pk.pem" "-production.pk" "-production.pk.pem" -}}
+            {{- /* define filename extensions to try */ -}}
+            {{- $crtExts := list
+                ".crt"
+                ".crt.pem"
+            -}}
+            {{- $keyExts := list
+                ".key"
+                ".key.pem"
+                ".pk"
+                ".pk.pem"
+            -}}
 
-            {{- $certCrt := "" -}}
             {{- range $b := $bases -}}
-            {{- if eq $certCrt "" -}}
-                {{- range $ext := $crtExts -}}
-                {{- $path := printf "/etc/nginx/certs/%s%s" $b $ext -}}
-                {{- if exists $path -}}
-                    {{- $certCrt = $path -}}
+                {{- if eq $certCrt "" -}}
+                    {{- range $ext := $crtExts -}}
+                        {{- $path := printf "/etc/nginx/certs/%s%s" $b $ext -}}
+                        {{- if exists $path -}}
+                            {{- $certCrt = $path -}}
+                        {{- end -}}
+                    {{- end -}}
                 {{- end -}}
-                {{- end -}}
-            {{- end -}}
             {{- end -}}
 
-            {{- $certKey := "" -}}
             {{- range $b := $bases -}}
-            {{- if eq $certKey "" -}}
-                {{- range $ext := $keyExts -}}
-                {{- $path := printf "/etc/nginx/certs/%s%s" $b $ext -}}
-                {{- if exists $path -}}
-                    {{- $certKey = $path -}}
+                {{- if eq $certKey "" -}}
+                    {{- range $ext := $keyExts -}}
+                        {{- $path := printf "/etc/nginx/certs/%s%s" $b $ext -}}
+                        {{- if exists $path -}}
+                            {{- $certKey = $path -}}
+                        {{- end -}}
+                    {{- end -}}
                 {{- end -}}
-                {{- end -}}
-            {{- end -}}
             {{- end -}}
 
             {{- if or (empty $certCrt) (empty $certKey) }}
@@ -402,13 +414,19 @@
             {{- end }}
         {{- else }}
             {{- if $service.Scheme }}
-                {{- $scheme := $service.Scheme }}
+                {{- $scheme = $service.Scheme }}
             {{- end }}
         {{- end }}
 
         {{- if not $service }}
 # Debug: sanity check - service {{ $upstreamName }} doesn't exist
             {{- continue }}
+        {{- end }}
+
+
+        {{- $isTlsPassthrough := $value.IsTlsPassthrough | default false }}
+        {{- if $isTlsPassthrough }}
+            {{- $_ = set $sslPrereadEntries $value.ServerName $upstreamName }}
         {{- end }}
 
 
@@ -427,22 +445,22 @@
             {{- end }}
         {{- end }}
 
-        {{- /* check if port is exposed */}}
+        {{- /* check if port is exposed */ -}}
         {{- $exposedPortAddress := where $container.Addresses "Port" (toString $port) | first }}
         {{- if not $exposedPortAddress }}
 # Error: service {{ $upstreamName }} port {{ $port }} is not exposed for router {{ $key }}
-            {{ $upstreamBlocks = unset $upstreamBlocks $upstreamName }}
+            {{- $upstreamBlocks = unset $upstreamBlocks $upstreamName }}
             {{- continue }}
         {{- end }}
 
-        {{- /* warn/err for published addresses */}}
+        {{- /* warn/err for published addresses */ -}}
         {{- if not (empty $exposedPortAddress.HostPort) }}
             {{- if $globals.config.allow_published_addresses }}
 # /!\ WARNING: Virtual port published on host to {{ $exposedPortAddress.HostPort }}.
 #              Clients might be able to bypass the proxy and access the container directly.
             {{- else }}
 # Error: service {{ $upstreamName }} port is published to {{ $exposedPortAddress.HostPort }}
-                {{ $upstreamBlocks = unset $upstreamBlocks $upstreamName }}
+                {{- $upstreamBlocks = unset $upstreamBlocks $upstreamName }}
                 {{- continue }}
             {{- end }}
         {{- end }}
@@ -471,8 +489,9 @@
             {{- $newBlock = set $newBlock "IsTLS" $isTls }}
             {{- if $isTls }}
                 {{- $newBlock = set $newBlock "TlsCertCrt" $certCrt }}
-                {{- $newBlock = set $newBlock "TlsCertkey" $certKey }}
+                {{- $newBlock = set $newBlock "TlsCertKey" $certKey }}
             {{- end }}
+            {{- $newBlock = set $newBlock "IsTlsPassthrough" $isTlsPassthrough }}
             {{- $newBlock = set $newBlock "ListenPortIPv4" $listenPortIpv4 }}
             {{- $newBlock = set $newBlock "ListenPortIPv6" $listenPortIpv6 }}
             {{- $newBlock = set $newBlock "Locations" (list $newLocation) }}
@@ -488,12 +507,14 @@
 
 {{- /* the following block was shamelessly copied from:
      * https://github.com/nginx-proxy/nginx-proxy/blob/main/nginx.tmpl
-     */}}
+     */
+-}}
 {{- /* If the request from the downstream client has an "Upgrade:" header (set to any
      * non-empty value), pass "Connection: upgrade" to the upstream (backend) server.
      * Otherwise, the value for the "Connection" header depends on whether the user
      * has enabled keepalive to the upstream server.
-     */}}
+     */
+-}}
 map $http_upgrade $proxy_connection {
     default upgrade;
     '' $proxy_connection_noupgrade;
@@ -513,7 +534,8 @@ map $upstream_keepalive $proxy_connection_noupgrade {
      * - The $proxy_connection variable is used in a proxy_set_header directive in
      * the http block, so it is always fully resolved for every request -- even
      * those where proxy_pass is not used (e.g., unknown virtual host).
-     */}}
+     */
+-}}
 map "" $upstream_keepalive {
     # The value here should not matter because it should always be overridden in
     # a location block (see the "location" template) for all requests where the
@@ -521,8 +543,16 @@ map "" $upstream_keepalive {
     default false;
 }
 
+{{- /* render the ssl_preread block */ -}}
+{{- if gt (len $sslPrereadEntries) 0 }}
+map $ssl_preread_server_name $name {
+    {{- range $domain, $upstreamName := $sslPrereadEntries }}
+    {{ $domain }} {{ $upstreamName }};
+    {{- end }}
+}
+{{- end }}
 
-{{- /* Render the upstream blocks */}}
+{{- /* render the upstream blocks */ -}}
 {{- range $key, $upBlock := $upstreamBlocks }}
 upstream {{ $key }} {
     server {{ $upBlock.IP }}:{{ $upBlock.Port }};
@@ -546,7 +576,7 @@ upstream {{ $key }} {
 }
 {{- end }}
 
-{{- /* Render the server blocks */}}
+{{- /* render the server blocks */ -}}
 {{- range $key, $block := $serverBlocks }}
 server {
     server_name {{ $block.ServerName }};
@@ -561,8 +591,8 @@ server {
 
     {{- template "tls_policy" (dict "modern" $globals.config.use_modern_tls) }}
 
-    ssl_certificate {{ $block.TlsCrtFile }};
-    ssl_certificate_key {{ $block.TlsKeyFile }};
+    ssl_certificate {{ $block.TlsCertCrt }};
+    ssl_certificate_key {{ $block.TlsCertKey }};
 
         {{- if $globals.config.enable_hsts }}
     # HSTS (ngx_http_headers_module is required) (63072000 seconds)
@@ -579,7 +609,11 @@ server {
     {{- end }}
 
 
-    {{- range $location := $block.Locations }}
+    {{- if $block.IsTlsPassthrough }}
+    proxy_pass $name;
+    ssl_preread on;
+    {{- else }}
+        {{- range $location := $block.Locations }}
     location {{ $location.Path }} {
 
         proxy_http_version 1.1;
@@ -590,13 +624,14 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        {{- $upstreamKeepalive := get (get $upstreamBlocks $location.UpstreamName) "Keepalive" }}
+            {{- $upstreamKeepalive := get (get $upstreamBlocks $location.UpstreamName) "Keepalive" }}
         set $upstream_keepalive {{ if ne $upstreamKeepalive "disabled" }}true{{ else }}false{{ end }};
 
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $proxy_connection;
 
     }
+        {{- end }}
     {{- end }}
 }
 {{- end }}
