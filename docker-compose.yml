@@ -17,6 +17,8 @@ services:
     depends_on:
       init-volumes:
         condition: service_completed_successfully
+      docker-gen:
+        condition: service_started
     group_add:
       - "${CERTS_GID:?error}"
       - "${DOCKERGEN_GID:?error}"
