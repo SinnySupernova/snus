@@ -26,8 +26,7 @@
      * Note: $globals.NginxContainer may be nil if the container cannot be reached.
      * See also: <https://github.com/nginx-proxy/docker-gen/issues/458>,
      * <https://github.com/nginx-proxy/nginx-proxy/issues/2189>.
-     */
--}}
+     */}}
 {{- if $globals.NginxContainer }}
     {{- range sortObjectsByKeysAsc $globals.NginxContainer.Networks "Name" }}
         {{- $_ := set $globals.networks .Name . }}
@@ -44,8 +43,7 @@
 
 {{- /*
      * Template used to merge updates into dict value
-     */
--}}
+     */}}
 {{- define "updDicItmField" }}
     {{- $target := .target }}
     {{- $key := .key }}
@@ -67,8 +65,7 @@
 
 {{- /*
      * Template that returns IP of the container to use in upstream
-     */
--}}
+     */}}
 {{- define "container_ip" }}
     {{- $container := .container }}
     {{- $nginxContainer := .nginxContainer }}
@@ -134,8 +131,7 @@
 
 {{- /*
      * Template that transforms input endpoint to listen port
-     */
--}}
+     */}}
 {{- define "endpoint" }}
     {{- $endpoint := .endpoint }}
     {{- $isIpv6 := .isIpv6 }}
@@ -507,14 +503,12 @@
 
 {{- /* the following block was shamelessly copied from:
      * https://github.com/nginx-proxy/nginx-proxy/blob/main/nginx.tmpl
-     */
--}}
+     */}}
 {{- /* If the request from the downstream client has an "Upgrade:" header (set to any
      * non-empty value), pass "Connection: upgrade" to the upstream (backend) server.
      * Otherwise, the value for the "Connection" header depends on whether the user
      * has enabled keepalive to the upstream server.
-     */
--}}
+     */}}
 map $http_upgrade $proxy_connection {
     default upgrade;
     '' $proxy_connection_noupgrade;
@@ -534,8 +528,7 @@ map $upstream_keepalive $proxy_connection_noupgrade {
      * - The $proxy_connection variable is used in a proxy_set_header directive in
      * the http block, so it is always fully resolved for every request -- even
      * those where proxy_pass is not used (e.g., unknown virtual host).
-     */
--}}
+     */}}
 map "" $upstream_keepalive {
     # The value here should not matter because it should always be overridden in
     # a location block (see the "location" template) for all requests where the
