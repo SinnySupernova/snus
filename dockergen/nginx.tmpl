@@ -177,7 +177,6 @@
 
 {{- $upstreamBlocks := dict }}
 {{- $serverBlocks := dict }}
-{{- $sslPrereadEntries := dict }}
 
 
 {{- /* iterate over containers */ -}}
@@ -239,10 +238,6 @@
                 {{- $isTls := $value | parseBool }}
 #   router {{ $routerName }} isTls: {{ $isTls }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "IsTLS" "value" $isTls) }}
-            {{- else if and (eq (len $split) 5) (hasSuffix ".tls_passthrough" $key) }}
-                {{- $isTlsPassthrough := $value | parseBool }}
-#   router {{ $routerName }} isTlsPassthrough: {{ $isTlsPassthrough }}
-                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "IsTlsPassthrough" "value" $isTlsPassthrough) }}
             {{- else if and (eq (len $split) 5) (hasSuffix ".path" $key) }}
                 {{- $path := $value }}
 #   router {{ $routerName }} path: {{ $path }}
@@ -420,12 +415,6 @@
         {{- end }}
 
 
-        {{- $isTlsPassthrough := $value.IsTlsPassthrough | default false }}
-        {{- if $isTlsPassthrough }}
-            {{- $_ = set $sslPrereadEntries $value.ServerName $upstreamName }}
-        {{- end }}
-
-
         {{ $port := $service.Port }}
         {{- if empty $port }}
             {{- $firstExposedPort := (first $container.Addresses).Port | default "" }}
@@ -487,7 +476,6 @@
                 {{- $newBlock = set $newBlock "TlsCertCrt" $certCrt }}
                 {{- $newBlock = set $newBlock "TlsCertKey" $certKey }}
             {{- end }}
-            {{- $newBlock = set $newBlock "IsTlsPassthrough" $isTlsPassthrough }}
             {{- $newBlock = set $newBlock "ListenPortIPv4" $listenPortIpv4 }}
             {{- $newBlock = set $newBlock "ListenPortIPv6" $listenPortIpv6 }}
             {{- $newBlock = set $newBlock "Locations" (list $newLocation) }}
@@ -535,15 +523,6 @@ map "" $upstream_keepalive {
     # value actually matters.
     default false;
 }
-
-{{- /* render the ssl_preread block */ -}}
-{{- if gt (len $sslPrereadEntries) 0 }}
-map $ssl_preread_server_name $name {
-    {{- range $domain, $upstreamName := $sslPrereadEntries }}
-    {{ $domain }} {{ $upstreamName }};
-    {{- end }}
-}
-{{- end }}
 
 {{- /* render the upstream blocks */ -}}
 {{- range $key, $upBlock := $upstreamBlocks }}
@@ -594,19 +573,15 @@ server {
     {{- end }}
 
 
-    {{- if $block.ListenPortIpv4 }}
-    listen {{ $block.ListenPortIpv4 }}{{ $tlsString}};
+    {{- if $block.ListenPortIPv4 }}
+    listen {{ $block.ListenPortIPv4 }}{{ $tlsString}};
     {{- end }}
-    {{- if $block.ListenPortIpv6 }}
-    listen [::]:{{ $block.ListenPortIpv6 }}{{ $tlsString}};
+    {{- if $block.ListenPortIPv6 }}
+    listen [::]:{{ $block.ListenPortIPv6 }}{{ $tlsString}};
     {{- end }}
 
 
-    {{- if $block.IsTlsPassthrough }}
-    proxy_pass $name;
-    ssl_preread on;
-    {{- else }}
-        {{- range $location := $block.Locations }}
+    {{- range $location := $block.Locations }}
     location {{ $location.Path }} {
 
         proxy_http_version 1.1;
@@ -617,14 +592,13 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-            {{- $upstreamKeepalive := get (get $upstreamBlocks $location.UpstreamName) "Keepalive" }}
+        {{- $upstreamKeepalive := get (get $upstreamBlocks $location.UpstreamName) "Keepalive" }}
         set $upstream_keepalive {{ if ne $upstreamKeepalive "disabled" }}true{{ else }}false{{ end }};
 
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $proxy_connection;
 
     }
-        {{- end }}
     {{- end }}
 }
 {{- end }}
