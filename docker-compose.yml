@@ -43,7 +43,6 @@ services:
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - certs:/etc/nginx/certs:ro
-      - nginx-logs:/var/log/nginx
 
   certs:
     image: "acmed:local"
@@ -166,7 +165,7 @@ services:
     command:
       - "sh"
       - "-c"
-      - "chown ${CERTS_UID:?error}:${CERTS_GID:?error} /acmed-accounts && chown ${CERTS_UID:?error}:${CERTS_GID:?error} /certs && chown ${NGINX_UID:?error}:${NGINX_GID:?error} /nginx-logs"
+      - "chown ${CERTS_UID:?error}:${CERTS_GID:?error} /acmed-accounts && chown ${CERTS_UID:?error}:${CERTS_GID:?error} /certs"
     network_mode: none
     read_only: true
     restart: no
@@ -175,7 +174,6 @@ services:
     volumes:
       - acmed-accounts:/acmed-accounts
       - certs:/certs
-      - nginx-logs:/nginx-logs
 
 networks:
   nginx_net:
@@ -198,5 +196,3 @@ volumes:
       type: tmpfs
       device: tmpfs
       o: uid=${CERTS_UID:?error},gid=${CERTS_GID:?error},mode=0700
-  nginx-logs:
-    name: nginx-logs
