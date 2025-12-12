@@ -6,12 +6,12 @@ sinny's nginx unprivileged setup
 - any sh-compatible shell (sh, bash, zsh, fish, etc.)
 - git 📦
 - [podman](https://github.com/containers/podman/) 📦 or [docker](https://docs.docker.com/engine/install/) (rootless supported for both)
-- [make](https://www.gnu.org/software/make/) 📦
+- [make](https://www.gnu.org/software/make/) 📦 (also available as a [docker image](https://hub.docker.com/r/alpine/make))
 - [docker compose](https://github.com/docker/compose) 📦
 - access control lists ([ACL](https://wiki.archlinux.org/title/Access_Control_Lists)) 📦
 - a DNS provider capable of DNS-01 challenge (from [this list](https://github.com/acmesh-official/acme.sh/wiki/dnsapi))
 
-📦 - likely available as a package for your system, alternatively you could use [this docker image](https://hub.docker.com/r/alpine/make)
+📦 - likely available as a package for your system
 
 ## quickstart
 
