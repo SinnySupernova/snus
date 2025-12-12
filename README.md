@@ -11,15 +11,15 @@ sinny's nginx unprivileged setup
 - access control lists ([ACL](https://wiki.archlinux.org/title/Access_Control_Lists)) 📦
 - a DNS provider capable of DNS-01 challenge (from [this list](https://github.com/acmesh-official/acme.sh/wiki/dnsapi))
 
-📦 - likely available as a package for your system
+📦 - likely available as a package for your system, alternatively you could use [this docker image](https://hub.docker.com/r/alpine/make)
 
 ## quickstart
 
-0. run `git clone --depth=1 && https://github.com/SinnySupernova/snus.git && cd snus` to clone the repository and cd into it
+0. run `git clone --depth=1 https://github.com/SinnySupernova/snus.git && cd snus` to clone the repository and cd into it
 1. run `make config` to copy the example config to the `config.toml` file
 2. open the `config.toml` file and adjust the settings
 3. run `make init` to perform the initial setup
-4. run `make up` to launch everything
+4. run `make up` to launch everything (will take more time on the first launch)
 
 ## updating
 
@@ -90,9 +90,27 @@ pulls updates from the [dockergen git repo](https://github.com/nginx-proxy/docke
 
 this runs automatically during `make init`
 
-then source the file or start a new shell and you should be able to run `make` in docker
+## q&a
 
-[this docker image](https://hub.docker.com/r/alpine/make) is used
+---
+
+**Q:** the following cryptic thing shows up during `make init`:  
+```
+WARN[0000] The cgroupv2 manager is set to systemd but there is no systemd user session available
+WARN[0000] For using systemd, you may need to log in using a user session
+WARN[0000] Alternatively, you can enable lingering with: `loginctl enable-linger USER_ID_HERE` (possibly as root)
+WARN[0000] Falling back to --cgroup-manager=cgroupfs
+```
+**A:** firstly, do enable lingering sessions for your user  
+if that alone doesn't help, run `systemctl --user start dbus` as well
+
+---
+
+**Q:** the following error happens during updating docker sock gid stage: `Error: Podman socket does not exist`  
+**A:** if you're running rootless `podman` you need to make sure that Podman socket service is enabled for your user;  
+on systemd systems this can be done by running `systemctl --user enable --now podman.socket`
+
+---
 
 ## license
 
