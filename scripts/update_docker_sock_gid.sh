@@ -6,6 +6,10 @@ container_runtime=$1
 
 if [ "$container_runtime" = "podman" ]; then
     DOCKER_SOCK_PATH=$(podman info --format "{{.Host.RemoteSocket.Path}}")
+    if [ ! -S "$DOCKER_SOCK_PATH" ]; then
+        echo "Error: Podman socket does not exist" >&2
+        exit 1
+    fi
 else
     USER_SOCK="/run/user/$(id -u)/docker.sock" # rootless docker
     SYSTEM_SOCK="/var/run/docker.sock" # rootful docker
@@ -15,7 +19,7 @@ else
     elif [ -S "$SYSTEM_SOCK" ]; then
         DOCKER_SOCK_PATH="$SYSTEM_SOCK"
     else
-        echo "Error: no valid Docker socket found!" >&2
+        echo "Error: Docker socket does not exist" >&2
         exit 1
     fi
 fi
