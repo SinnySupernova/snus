@@ -6,7 +6,7 @@ RUN cargo build --release
 FROM debian:bookworm-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    openssl ca-certificates \
+    dnsutils curl openssl ca-certificates \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=builder /code/target/release/acmed /usr/local/bin/acmed
