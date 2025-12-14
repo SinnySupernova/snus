@@ -97,7 +97,7 @@ services:
       - "-notify-sighup"
       - "nginx"
       - "-watch"
-      - "-only-exposed"
+      # - "-only-exposed"
       # - "-keep-blank-lines"
       - "-wait"
       - "500ms:2s"

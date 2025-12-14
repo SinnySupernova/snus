@@ -257,7 +257,7 @@
             {{- if and (eq (len $split) 5) (hasSuffix ".port" $key) }}
                 {{- $port := atoi $value }}
                 {{- if eq $port 0 }}
-# /!\ WARNING: service {{ $serviceName }} oort {{ $value }} is invalid
+# /!\ WARNING: service {{ $serviceName }} port {{ $value }} is invalid
                 {{- else }}
 #   service {{ $serviceName }} port: {{ $port }}
                     {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "Port" "value" $port) }}
