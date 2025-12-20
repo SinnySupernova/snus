@@ -1,10 +1,17 @@
-!config/config.example.toml
-env/*
+# config
+/config.toml
+!/config/config.example.toml
+
+# nginx
+/nginx/.nginx-ports.yml
+/nginx/conf.d/*
+!/nginx/conf.d/default.conf
+!/nginx/conf.d/health.conf
+
+# acmed
+/certs/acmed/acmed.toml
+/certs/acmed/hook-logs
+
+# misc
+/env/*
 **/repo
-nginx/.nginx-ports.yml
-nginx/conf.d/*
-!nginx/conf.d/default.conf
-!nginx/conf.d/health.conf
-certs/acmed/acmed.toml
-certs/acmed/hook-logs
-config.toml
