@@ -70,6 +70,8 @@ update-dockergen: check-config
 	@scripts/update_repo.sh "$(call get_config_value,dockergen.repo)" "https://github.com/nginx-proxy/docker-gen.git"
 	@echo "Updating dockergen file permissions"
 	@scripts/set_permissions_dockergen.sh "$(call get_config_value,dockergen.gid)"
+	@echo "Removing old dockergen configs"
+	@rm -f "nginx/*conf.d/dockergen*.conf"
 
 update-docker-sock-gid: check-config
 	@echo "Updating docker.sock gid"

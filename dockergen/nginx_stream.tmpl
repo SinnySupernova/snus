@@ -204,7 +204,7 @@ upstream {{ $key }} {
                     {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "Port" "value" $port) }}
                 {{- end }}
             {{- else if and (eq (len $split) 5) (hasSuffix ".proxy_protocol" $key) }}
-                {{- $isProxyProtocol := $value | parseBool }}
+                {{- $isProxyProtocol := $value | default "false" | parseBool }}
                 {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "IsProxyProtocol" "value" $isProxyProtocol) }}
             {{- end }}
 
