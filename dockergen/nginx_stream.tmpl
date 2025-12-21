@@ -1,0 +1,350 @@
+{{- $globals := dict }}
+{{- $_ := set $globals "containers" $ }}
+{{- $_ := set $globals "Env" $.Env }}
+{{- $_ := set $globals "Docker" $.Docker }}
+{{- $_ := set $globals "NginxContainer" (where $globals.containers "Name" ($globals.Env.NGINX_CONTAINER_NAME | default "nginx") | first) }}
+
+{{- $config := dict }}
+{{- $_ := set $config "allow_published_addresses" ($globals.Env.ALLOW_PUBLISHED_ADDRESSES | default "false" | parseBool) }}
+{{- $_ := set $config "listen_ipv4" ($globals.Env.LISTEN_IPV4 | default "true" | parseBool) }}
+{{- $_ := set $config "listen_ipv6" ($globals.Env.LISTEN_IPV6 | default "false" | parseBool) }}
+
+
+{{- $_ := set $globals "config" $config }}
+
+{{- $_ := set $globals "networks" (dict) }}
+# Networks available to the container running nginx:
+{{- /*
+     * Note: $globals.NginxContainer may be nil if the container cannot be reached.
+     * See also: <https://github.com/nginx-proxy/docker-gen/issues/458>,
+     * <https://github.com/nginx-proxy/nginx-proxy/issues/2189>.
+     */}}
+{{- if $globals.NginxContainer }}
+    {{- range sortObjectsByKeysAsc $globals.NginxContainer.Networks "Name" }}
+        {{- $_ := set $globals.networks .Name . }}
+#     {{ .Name }}
+    {{- else }}
+#     (none)
+    {{- end }}
+{{- else }}
+# /!\ WARNING: Failed to find the Docker container running nginx.
+#              See also: <https://github.com/nginx-proxy/docker-gen/issues/458>
+#              and <https://github.com/nginx-proxy/nginx-proxy/issues/2189>.
+{{- end }}
+
+
+{{- /*
+     * Template used to merge updates into dict value
+     */}}
+{{- define "updDicItmField" }}
+    {{- $target := .target }}
+    {{- $key := .key }}
+    {{- $field := .field }}
+    {{- $value := .value }}
+
+    {{- if hasKey $target $key }}
+        {{- /* update existing */ -}}
+        {{- $existingValue := index $target $key }}
+        {{- if ne (index $existingValue $field) $value }}
+            {{- $updatedValue := dict $field $value }}
+            {{- $target = merge $target (dict $key (merge $existingValue $updatedValue)) }}
+        {{- end }}
+    {{- else }}
+        {{- $target = set $target $key (dict $field $value) }}
+    {{- end }}
+{{- end }}
+
+
+{{- /*
+     * Template that returns IP of the container to use in upstream
+     */}}
+{{- define "container_ip" }}
+    {{- $container := .container }}
+    {{- $nginxContainer := .nginxContainer }}
+
+    {{- $bridgeNet := dict }}
+
+    {{- /* check container labels for a network and try to use it  */ -}}
+    {{- $labelNetName := index $container.Labels "dockergen.network" }}
+    {{- if not (empty $labelNetName) }}
+        {{ $cLn := where $container.Networks "Name" $labelNetName | first }}
+        {{- if and $cLn (where $nginxContainer.Networks "Name" $labelNetName | first) }}
+            {{- $bridgeNet = $cLn }}
+        {{- end }}
+    {{- else }}
+        {{- /* check if this container has a common network with the nginx container  */ -}}
+        {{- range $idx, $nCn := $nginxContainer.Networks }}
+            {{- $net := where $container.Networks "Name" $nCn.Name | first }}
+            {{- if $net }}
+                {{- /* skip net "ingress" if container is in swarm mode */ -}}
+                {{- if and $container.Node (eq $nCn.Name "ingress") }}
+                    {{- continue }}
+                {{- end }}
+
+                {{- $bridgeNet = $net }}
+                {{- break }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+
+
+    {{- if not $bridgeNet }}
+        {{- if not (empty $labelNetName) }}
+#   net from label {{ $labelNetName }} is not connecting this container with nginx container
+        {{- else }}
+#   no common net with nginx container
+        {{- end }}
+    {{- else }}
+#   bridge net: {{ $bridgeNet.Name }}
+        {{- if eq (index $container.Labels "dockergen.upstream.use_ipv6") "true" }}
+            {{- $ipv6 := $bridgeNet.GlobalIPv6Address }}
+            {{- if not (empty $ipv6) }}
+                {{- $_ := set $ "ip" (printf "[%s]" $ipv6) }}
+            {{- else }}
+#   ipv6 requested but not available in this network
+            {{- end }}
+        {{- else }}
+            {{- $ipv4 := $bridgeNet.IP }}
+            {{- if not (empty $ipv4) }}
+                {{- $_ := set $ "ip" $ipv4 }}
+            {{- else }}
+                {{- $ipv6 := $bridgeNet.GlobalIPv6Address }}
+                {{- if not (empty $ipv6) }}
+#   ipv4 not available in this network, using ipv6
+                    {{- $_ := set $ "ip" (printf "[%s]" $ipv6) }}
+                {{- else }}
+#   neither ipv4 nor ipv6 are available in this network
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+
+{{- end }}
+
+
+{{- $upstreamBlocks := dict }}
+{{- $serverBlocks := dict }}
+
+
+{{- /* render the upstream blocks */ -}}
+{{- range $key, $upBlock := $upstreamBlocks }}
+upstream {{ $key }} {
+    server {{ $upBlock.IP }}:{{ $upBlock.Port }};
+}
+{{- end }}
+
+
+
+{{- /* iterate over containers */ -}}
+{{- range $container := $globals.containers }}
+# === container {{ $container.Name }} ===
+
+    {{- if ne $container.State.Running true }}
+        {{ continue }}
+    {{- end }}
+
+# running
+
+    {{- if ne (index $container.Labels "dockergen.enable") "true" }}
+        {{ continue }}
+    {{- end }}
+
+# enabled
+
+    {{- $args := dict "nginxContainer" $globals.NginxContainer "container" $container }}
+    {{- template "container_ip" $args }}
+    {{- if not $args.ip }}
+# Error: container ip cannot be determined
+        {{ continue }}
+    {{- end }}
+    {{- $containerIp := $args.ip }}
+# container ip: {{ $containerIp }}
+
+
+    {{- $routers := dict }}
+    {{- $services := dict }}
+
+    {{- range $key, $value := $container.Labels }}
+
+        {{- $split := split $key "." }}
+
+        {{- if (hasPrefix "dockergen.tcp.routers." $key) }}
+#   r-key: {{ $key }}
+            {{ $routerName := index $split 3 }}
+
+            {{- /* docker container IDs are alnum so a dash delimiter works */}}
+            {{ $routerKey := printf "%s-%s" $container.Name $routerName }}
+            {{- if and (eq (len $split) 5) (hasSuffix ".sni" $key) }}
+                {{- $sni := $value }}
+#   router {{ $routerName }} SNI: {{ $sni }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "SNI" "value" $sni) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".endpoint" $key) }}
+                {{- $endpoint := $value }}
+#   router {{ $routerName }} endpoint: {{ $endpoint }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Endpoint" "value" $endpoint) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".endpoint_ipv6" $key) }}
+                {{- $endpointIpv6 := $value }}
+#   router {{ $routerName }} endpoint_ipv6: {{ $endpointIpv6 }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "EndpointIPv6" "value" $endpointIpv6) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".service" $key) }}
+                {{- $serviceName := $value }}
+#   router {{ $routerName }} service: {{ $serviceName }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServiceName" "value" (printf "%s-%s" $container.Name $serviceName)) }}
+            {{- end }}
+        {{- else if (hasPrefix "dockergen.tcp.services." $key) }}
+#   s-key: {{ $key }}
+            {{ $serviceName := index (split $key ".") 3 }}
+
+            {{- /* docker container IDs are alnum so a dash delimiter works */}}
+            {{ $serviceKey := printf "%s-%s" $container.Name $serviceName }}
+            {{- if and (eq (len $split) 5) (hasSuffix ".port" $key) }}
+                {{- $port := atoi $value }}
+                {{- if eq $port 0 }}
+# /!\ WARNING: service {{ $serviceName }} port {{ $value }} is invalid
+                {{- else }}
+#   service {{ $serviceName }} port: {{ $port }}
+                    {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "Port" "value" $port) }}
+                {{- end }}
+            {{- end }}
+
+        {{- end }}
+
+    {{- end }}
+
+    {{- /* compose upstream blocks */ -}}
+    {{- range $key, $value := $services }}
+        {{- $upBlock := dict "IP" $containerIp }}
+        {{- $port := $value.Port }}
+        {{- if ne $port 0 }}
+            {{- $_ := merge $upBlock (dict "Port" $port) }}
+        {{- end }}
+    {{- $upBlock = set $upstreamBlocks $key $upBlock }}
+#   upstream {{ $key }} block {{ $upBlock }}
+    {{- end }}
+
+    {{- /* compose server blocks */ -}}
+    {{- range $key, $value := $routers }}
+#   compose server binding for router {{ $key }}
+
+        {{- $listenPortIpv4 := 0 }}
+        {{- if or $globals.config.listen_ipv4 $value.Endpoint }}
+            {{- $listenPortIpv4 = (atoi $value.Endpoint) }}
+            {{- if eq $listenPortIpv4 0 }}
+# Error: ipv4 listen port {{ $value.Endpoint }} is not a number
+                {{- continue }}
+            {{- end }}
+        {{- end }}
+#   ipv4 listen port: {{ $listenPortIpv4 }}
+
+        {{- $listenPortIpv6 := 0 }}
+        {{- if or $globals.config.listen_ipv6 $value.EndpointIPv6 }}
+            {{- $listenPortIpv6 = (atoi $value.EndpointIPv6) }}
+            {{- if eq $listenPortIpv6 0 }}
+# Error: ipv6 listen port {{ $value.EndpointIPv6 }} is not a number
+                {{- continue }}
+            {{- end }}
+        {{- end }}
+#   ipv6 listen port: {{ $listenPortIpv6 }}
+
+        {{- if and (eq $listenPortIpv4 0) (eq $listenPortIpv6 0) }}
+# Error: no valid endpoints
+            {{- continue }}
+        {{- end }}
+
+
+        {{- $sbKey := printf "%s-%d-%d" $value.ServerName $listenPortIpv4 $listenPortIpv6 }}
+#   server block key: {{ $sbKey }}
+
+
+        {{- $upstreamName := $value.ServiceName | default $key }}
+#   upstream name : {{ $upstreamName }}
+
+        {{- $service := index $services $upstreamName }}
+        {{- if not $service }}
+            {{- if eq $upstreamName $key }}
+#   creating implicit service {{ $upstreamName }} for router {{ $key }}
+                {{- $service = set $services $upstreamName (dict "IP" $containerIp)}}
+            {{- else }}
+# Error: service {{ $upstreamName }} doesn't exist for router {{ $key }}
+                {{- continue }}
+            {{- end }}
+        {{- end }}
+
+        {{- if not $service }}
+# Debug: sanity check - service {{ $upstreamName }} doesn't exist
+            {{- continue }}
+        {{- end }}
+
+
+        {{ $port := $service.Port }}
+        {{- if empty $port }}
+            {{- $firstExposedPort := (first $container.Addresses).Port | default "" }}
+            {{- if not (empty $firstExposedPort) }}
+#       implicit port {{ $firstExposedPort }} (first exposed)
+                {{- $port = $firstExposedPort }}
+                {{- template "updDicItmField" (dict "target" $services "key" $upstreamName "field" "Port" "value" $port) }}
+#   creating implicit upstream {{ $upstreamName }} ip {{ $containerIp }} port {{ $port }}
+                {{- $_ := set $upstreamBlocks $key (dict "IP" $containerIp "Port" $port) }}
+            {{- else }}
+# Error: router {{ $key }} doesn't have any exposed ports, can't implicitly choose the first one
+                {{- continue }}
+            {{- end }}
+        {{- end }}
+
+        {{- /* check if port is exposed */ -}}
+        {{- $exposedPortAddress := where $container.Addresses "Port" (toString $port) | first }}
+        {{- if not $exposedPortAddress }}
+# Error: service {{ $upstreamName }} port {{ $port }} is not exposed for router {{ $key }}
+            {{- $upstreamBlocks = unset $upstreamBlocks $upstreamName }}
+            {{- continue }}
+        {{- end }}
+
+        {{- /* warn/err for published addresses */ -}}
+        {{- if not (empty $exposedPortAddress.HostPort) }}
+            {{- if $globals.config.allow_published_addresses }}
+# /!\ WARNING: Virtual port published on host to {{ $exposedPortAddress.HostPort }}.
+#              Clients might be able to bypass the proxy and access the container directly.
+            {{- else }}
+# Error: service {{ $upstreamName }} port is published to {{ $exposedPortAddress.HostPort }}
+                {{- $upstreamBlocks = unset $upstreamBlocks $upstreamName }}
+                {{- continue }}
+            {{- end }}
+        {{- end }}
+
+
+        {{- if hasKey $serverBlocks $sbKey }}
+            {{- $existingBlock := index $serverBlocks $sbKey }}
+            {{- $updatedBlock := set $existingBlock "UpstreamName" $upstreamName }}
+#   server {{ $sbKey }} upd block {{ $updatedBlock }}
+            {{- $serverBlocks = merge $serverBlocks (dict $sbKey $updatedBlock) }}
+        {{- else }}
+            {{- $newBlock := dict "ServerName" $value.ServerName "ListenPortIPv4" $listenPortIpv4 "ListenPortIPv6" $listenPortIpv6 "UpstreamName" $upstreamName }}
+#   server {{ $sbKey }} data {{ $newBlock }}
+            {{- $serverBlocks = merge $serverBlocks (dict $sbKey $newBlock) }}
+        {{- end }}
+
+    {{- end }}
+
+
+{{- end }}
+
+
+{{- /* render the server blocks */ -}}
+{{- range $key, $block := $serverBlocks }}
+server {
+    {{- $proxyProtocolString := "" }}
+    {{- if $block.IsProxyProtocol }}
+        {{- $proxyProtocolString = " proxy_protocol" }}
+    {{- end }}
+    {{- if $block.ListenPortIPv4 }}
+    listen {{ $block.ListenPortIPv4 }}{{ $proxyProtocolString}};
+    {{- end }}
+    {{- if $block.ListenPortIPv6 }}
+    listen [::]:{{ $block.ListenPortIPv6 }}{{ $proxyProtocolString}};
+    {{- end }}
+    proxy_pass {{ $block.UpstreamName }};
+    {{- if $block.IsProxyProtocol }}
+    proxy_protocol on;
+    {{- end }}
+}
+{{- end }}
