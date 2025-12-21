@@ -205,6 +205,9 @@ upstream {{ $key }} {
 #   service {{ $serviceName }} port: {{ $port }}
                     {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "Port" "value" $port) }}
                 {{- end }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".proxy_protocol" $key) }}
+                {{- $isProxyProtocol := $value | parseBool }}
+                {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "IsProxyProtocol" "value" $isProxyProtocol) }}
             {{- end }}
 
         {{- end }}
@@ -318,7 +321,7 @@ upstream {{ $key }} {
 #   server {{ $sbKey }} upd block {{ $updatedBlock }}
             {{- $serverBlocks = merge $serverBlocks (dict $sbKey $updatedBlock) }}
         {{- else }}
-            {{- $newBlock := dict "ServerName" $value.ServerName "ListenPortIPv4" $listenPortIpv4 "ListenPortIPv6" $listenPortIpv6 "UpstreamName" $upstreamName }}
+            {{- $newBlock := dict "ServerName" $value.ServerName "ListenPortIPv4" $listenPortIpv4 "ListenPortIPv6" $listenPortIpv6 "UpstreamName" $upstreamName "IsProxyProtocol" $service.IsProxyProtocol }}
 #   server {{ $sbKey }} data {{ $newBlock }}
             {{- $serverBlocks = merge $serverBlocks (dict $sbKey $newBlock) }}
         {{- end }}
