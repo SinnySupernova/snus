@@ -124,15 +124,6 @@
 {{- $serverBlocks := dict }}
 
 
-{{- /* render the upstream blocks */ -}}
-{{- range $key, $upBlock := $upstreamBlocks }}
-upstream {{ $key }} {
-    server {{ $upBlock.IP }}:{{ $upBlock.Port }};
-}
-{{- end }}
-
-
-
 {{- /* iterate over containers */ -}}
 {{- range $container := $globals.containers }}
 # === container {{ $container.Name }} ===
@@ -327,6 +318,14 @@ upstream {{ $key }} {
     {{- end }}
 
 
+{{- end }}
+
+
+{{- /* render the upstream blocks */ -}}
+{{- range $key, $upBlock := $upstreamBlocks }}
+upstream {{ $key }} {
+    server {{ $upBlock.IP }}:{{ $upBlock.Port }};
+}
 {{- end }}
 
 
