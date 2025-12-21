@@ -7,7 +7,7 @@
 /nginx/conf.d/*
 !/nginx/conf.d/default.conf
 !/nginx/conf.d/health.conf
-/nginx/stream.conf.d
+/nginx/stream-conf.d
 
 # acmed
 /certs/acmed/acmed.toml

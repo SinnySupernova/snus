@@ -9,12 +9,12 @@ if [ -z "${DOCKERGEN_GID}" ]; then
     exit 1
 fi
 
-if [ ! -d ./nginx/stream.conf.d ]; then
-    mkdir -p ./nginx/stream.conf.d
+if [ ! -d ./nginx/stream-conf.d ]; then
+    mkdir -p ./nginx/stream-conf.d
 fi
 
 setfacl -m g:${DOCKERGEN_GID}:r ./dockergen/nginx.tmpl
-for dir in ./nginx/conf.d ./nginx/stream.conf.d; do
+for dir in ./nginx/conf.d ./nginx/stream-conf.d; do
     setfacl -m g::rwX "$dir"
     setfacl -dm g:${DOCKERGEN_GID}:rwX "$dir"
     setfacl -Rdm u:$(id -g):rw "$dir"

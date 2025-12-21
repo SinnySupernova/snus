@@ -1,6 +1,6 @@
 [[config]]
 template = "/etc/docker-gen/templates/nginx_stream.tmpl"
-dest = "/etc/nginx/stream.conf.d/dockergen_stream.conf"
+dest = "/etc/nginx/stream-conf.d/dockergen_stream.conf"
 watch = true
 wait = "500ms:2s"
 

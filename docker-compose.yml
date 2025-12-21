@@ -41,8 +41,9 @@ services:
     user: "${NGINX_UID:?error}:${NGINX_GID:?error}"
     userns_mode: keep-id
     volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/stream.conf.d:/etc/nginx/stream.conf.d:ro
+      - ./nginx/stream-conf.d:/etc/nginx/stream-conf.d:ro
       - certs:/etc/nginx/certs:ro
 
   certs:
@@ -125,7 +126,7 @@ services:
       - ./dockergen/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl:ro
       - ./dockergen/nginx_stream.tmpl:/etc/docker-gen/templates/nginx_stream.tmpl:ro
       - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./nginx/stream.conf.d:/etc/nginx/stream.conf.d
+      - ./nginx/stream-conf.d:/etc/nginx/stream-conf.d
       - certs:/etc/nginx/certs:ro
 
   dockerproxy:
