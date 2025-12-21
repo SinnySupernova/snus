@@ -6,8 +6,8 @@
 
 {{- $config := dict }}
 {{- $_ := set $config "allow_published_addresses" ($globals.Env.ALLOW_PUBLISHED_ADDRESSES | default "false" | parseBool) }}
-{{- $_ := set $config "default_endpoint_ipv4" ($globals.Env.DEFAULT_ENDPOINT_IPV4 | default "https") }}
-{{- $_ := set $config "default_endpoint_ipv6" ($globals.Env.DEFAULT_ENDPOINT_IPV6 | default "https") }}
+{{- $_ := set $config "default_entrypoint_ipv4" ($globals.Env.DEFAULT_ENTRYPOINT_IPV4 | default "https") }}
+{{- $_ := set $config "default_entrypoint_ipv6" ($globals.Env.DEFAULT_ENTRYPOINT_IPV6 | default "https") }}
 {{- $_ := set $config "external_http_port" ($globals.Env.HTTP_PORT | default "80") }}
 {{- $_ := set $config "external_https_port" ($globals.Env.HTTPS_PORT | default "443") }}
 {{- $_ := set $config "listen_ipv4" ($globals.Env.LISTEN_IPV4 | default "true" | parseBool) }}
@@ -130,29 +130,29 @@
 {{- end }}
 
 {{- /*
-     * Template that transforms input endpoint to listen port
+     * Template that transforms input entrypoint to listen port
      */}}
-{{- define "endpoint" }}
-    {{- $endpoint := .endpoint }}
+{{- define "entrypoint" }}
+    {{- $entrypoint := .entrypoint }}
     {{- $isIpv6 := .isIpv6 }}
     {{- $globals := .globals }}
 
-    {{- if not $endpoint }}
+    {{- if not $entrypoint }}
         {{- if $isIpv6 }}
-            {{- $endpoint = $globals.config.default_endpoint_ipv6 }}
+            {{- $entrypoint = $globals.config.default_entrypoint_ipv6 }}
         {{- else }}
-            {{- $endpoint = $globals.config.default_endpoint_ipv4 }}
+            {{- $entrypoint = $globals.config.default_entrypoint_ipv4 }}
         {{- end }}
-#   using default endpoint {{ $endpoint }}
+#   using default entrypoint {{ $entrypoint }}
     {{- end }}
 
-    {{- if eq $endpoint "http" }}
-        {{- $endpoint = $globals.config.external_http_port }}
-    {{- else if eq $endpoint "https" }}
-        {{- $endpoint = $globals.config.external_https_port }}
+    {{- if eq $entrypoint "http" }}
+        {{- $entrypoint = $globals.config.external_http_port }}
+    {{- else if eq $entrypoint "https" }}
+        {{- $entrypoint = $globals.config.external_https_port }}
     {{- end }}
 
-    {{- $_ := set . "listenPort" (atoi $endpoint) }}
+    {{- $_ := set . "listenPort" (atoi $entrypoint) }}
 
 {{- end }}
 
@@ -222,18 +222,18 @@
                 {{- $serverName := $value }}
 #   router {{ $routerName }} server_name: {{ $serverName }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServerName" "value" $serverName) }}
-            {{- else if and (eq (len $split) 5) (hasSuffix ".endpoint" $key) }}
-                {{- $endpoint := $value }}
-#   router {{ $routerName }} endpoint: {{ $endpoint }}
-                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Endpoint" "value" $endpoint) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".entrypoint" $key) }}
+                {{- $entrypoint := $value }}
+#   router {{ $routerName }} entrypoint: {{ $entrypoint }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Entrypoint" "value" $entrypoint) }}
             {{- else if and (eq (len $split) 5) (hasSuffix ".cert_name" $key) }}
                 {{- $certName := $value }}
 #   router {{ $routerName }} cert_name: {{ $certName }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "CertName" "value" $certName) }}
-            {{- else if and (eq (len $split) 5) (hasSuffix ".endpoint_ipv6" $key) }}
-                {{- $endpointIpv6 := $value }}
-#   router {{ $routerName }} endpoint_ipv6: {{ $endpointIpv6 }}
-                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "EndpointIPv6" "value" $endpointIpv6) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".entrypoint_ipv6" $key) }}
+                {{- $entrypointIpv6 := $value }}
+#   router {{ $routerName }} entrypoint_ipv6: {{ $entrypointIpv6 }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "EntrypointIPv6" "value" $entrypointIpv6) }}
             {{- else if and (eq (len $split) 5) (hasSuffix ".tls" $key) }}
                 {{- $isTls := $value | parseBool }}
 #   router {{ $routerName }} isTls: {{ $isTls }}
@@ -292,31 +292,31 @@
 #   compose server binding for router {{ $key }}
 
         {{- $listenPortIpv4 := 0 }}
-        {{- if or $globals.config.listen_ipv4 $value.Endpoint }}
-            {{- $args := dict "endpoint" $value.Endpoint "isIpv6" false "globals" $globals }}
-            {{- template "endpoint" $args }}
+        {{- if or $globals.config.listen_ipv4 $value.Entrypoint }}
+            {{- $args := dict "entrypoint" $value.Entrypoint "isIpv6" false "globals" $globals }}
+            {{- template "entrypoint" $args }}
             {{- $listenPortIpv4 = $args.listenPort }}
             {{- if eq $listenPortIpv4 0 }}
-# Error: ipv4 endpoint {{ $value.Endpoint }} is not "http", "https" or a number
+# Error: ipv4 entrypoint {{ $value.Entrypoint }} is not "http", "https" or a number
                 {{- continue }}
             {{- end }}
         {{- end }}
 #   ipv4 listen port: {{ $listenPortIpv4 }}
 
         {{- $listenPortIpv6 := 0 }}
-        {{- if or $globals.config.listen_ipv6 $value.EndpointIPv6 }}
-            {{- $args := dict "endpoint" $value.EndpointIPv6 "isIpv6" true "globals" $globals }}
-            {{- template "endpoint" $args }}
+        {{- if or $globals.config.listen_ipv6 $value.EntrypointIPv6 }}
+            {{- $args := dict "entrypoint" $value.EntrypointIPv6 "isIpv6" true "globals" $globals }}
+            {{- template "entrypoint" $args }}
             {{- $listenPortIpv6 = $args.listenPort }}
             {{- if eq $listenPortIpv6 0 }}
-# Error: ipv6 endpoint {{ $value.EndpointIPv6 }} is not "http", "https" or a number
+# Error: ipv6 entrypoint {{ $value.EntrypointIPv6 }} is not "http", "https" or a number
                 {{- continue }}
             {{- end }}
         {{- end }}
 #   ipv6 listen port: {{ $listenPortIpv6 }}
 
         {{- if and (eq $listenPortIpv4 0) (eq $listenPortIpv6 0) }}
-# Error: no valid endpoints
+# Error: no valid entrypoints
             {{- continue }}
         {{- end }}
 

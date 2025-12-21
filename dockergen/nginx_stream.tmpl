@@ -176,14 +176,14 @@ upstream {{ $key }} {
                 {{- $sni := $value }}
 #   router {{ $routerName }} SNI: {{ $sni }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "SNI" "value" $sni) }}
-            {{- else if and (eq (len $split) 5) (hasSuffix ".endpoint" $key) }}
-                {{- $endpoint := $value }}
-#   router {{ $routerName }} endpoint: {{ $endpoint }}
-                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Endpoint" "value" $endpoint) }}
-            {{- else if and (eq (len $split) 5) (hasSuffix ".endpoint_ipv6" $key) }}
-                {{- $endpointIpv6 := $value }}
-#   router {{ $routerName }} endpoint_ipv6: {{ $endpointIpv6 }}
-                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "EndpointIPv6" "value" $endpointIpv6) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".entrypoint" $key) }}
+                {{- $entrypoint := $value }}
+#   router {{ $routerName }} entrypoint: {{ $entrypoint }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Entrypoint" "value" $entrypoint) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".entrypoint_ipv6" $key) }}
+                {{- $entrypointIpv6 := $value }}
+#   router {{ $routerName }} entrypoint_ipv6: {{ $entrypointIpv6 }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "EntrypointIPv6" "value" $entrypointIpv6) }}
             {{- else if and (eq (len $split) 5) (hasSuffix ".service" $key) }}
                 {{- $serviceName := $value }}
 #   router {{ $routerName }} service: {{ $serviceName }}
@@ -228,27 +228,27 @@ upstream {{ $key }} {
 #   compose server binding for router {{ $key }}
 
         {{- $listenPortIpv4 := 0 }}
-        {{- if $value.Endpoint }}
-            {{- $listenPortIpv4 = (atoi $value.Endpoint) }}
+        {{- if $value.Entrypoint }}
+            {{- $listenPortIpv4 = (atoi $value.Entrypoint) }}
             {{- if eq $listenPortIpv4 0 }}
-# Error: ipv4 listen port {{ $value.Endpoint }} is not a number
+# Error: ipv4 listen port {{ $value.Entrypoint }} is not a number
                 {{- continue }}
             {{- end }}
         {{- end }}
 #   ipv4 listen port: {{ $listenPortIpv4 }}
 
         {{- $listenPortIpv6 := 0 }}
-        {{- if $value.EndpointIPv6 }}
-            {{- $listenPortIpv6 = (atoi $value.EndpointIPv6) }}
+        {{- if $value.EntrypointIPv6 }}
+            {{- $listenPortIpv6 = (atoi $value.EntrypointIPv6) }}
             {{- if eq $listenPortIpv6 0 }}
-# Error: ipv6 listen port {{ $value.EndpointIPv6 }} is not a number
+# Error: ipv6 listen port {{ $value.EntrypointIPv6 }} is not a number
                 {{- continue }}
             {{- end }}
         {{- end }}
 #   ipv6 listen port: {{ $listenPortIpv6 }}
 
         {{- if and (eq $listenPortIpv4 0) (eq $listenPortIpv6 0) }}
-# Error: no valid endpoints
+# Error: no valid entrypoints
             {{- continue }}
         {{- end }}
 
