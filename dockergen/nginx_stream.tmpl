@@ -6,8 +6,6 @@
 
 {{- $config := dict }}
 {{- $_ := set $config "allow_published_addresses" ($globals.Env.ALLOW_PUBLISHED_ADDRESSES | default "false" | parseBool) }}
-{{- $_ := set $config "listen_ipv4" ($globals.Env.LISTEN_IPV4 | default "true" | parseBool) }}
-{{- $_ := set $config "listen_ipv6" ($globals.Env.LISTEN_IPV6 | default "false" | parseBool) }}
 
 
 {{- $_ := set $globals "config" $config }}
@@ -230,7 +228,7 @@ upstream {{ $key }} {
 #   compose server binding for router {{ $key }}
 
         {{- $listenPortIpv4 := 0 }}
-        {{- if or $globals.config.listen_ipv4 $value.Endpoint }}
+        {{- if $value.Endpoint }}
             {{- $listenPortIpv4 = (atoi $value.Endpoint) }}
             {{- if eq $listenPortIpv4 0 }}
 # Error: ipv4 listen port {{ $value.Endpoint }} is not a number
@@ -240,7 +238,7 @@ upstream {{ $key }} {
 #   ipv4 listen port: {{ $listenPortIpv4 }}
 
         {{- $listenPortIpv6 := 0 }}
-        {{- if or $globals.config.listen_ipv6 $value.EndpointIPv6 }}
+        {{- if $value.EndpointIPv6 }}
             {{- $listenPortIpv6 = (atoi $value.EndpointIPv6) }}
             {{- if eq $listenPortIpv6 0 }}
 # Error: ipv6 listen port {{ $value.EndpointIPv6 }} is not a number
