@@ -9,6 +9,12 @@ if [ -z "${NGINX_GID}" ]; then
     exit 1
 fi
 
-setfacl -m g:${NGINX_GID}:r ./nginx/conf.d
-find ./nginx/conf.d -type f -user $(id -u) -exec setfacl -m g:${NGINX_GID}:r {} \;
-setfacl -dm g:${NGINX_GID}:r ./nginx/conf.d
+if [ ! -d ./nginx/stream.conf.d ]; then
+    mkdir -p ./nginx/stream.conf.d
+fi
+
+for dir in ./nginx/conf.d ./nginx/stream.conf.d; do
+    setfacl -m g:${NGINX_GID}:r "$dir"
+    find "$dir" -type f -user $(id -u) -exec setfacl -m g:${NGINX_GID}:r {} \;
+    setfacl -dm g:${NGINX_GID}:r "$dir"
+done

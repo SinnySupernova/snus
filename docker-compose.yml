@@ -42,6 +42,7 @@ services:
     userns_mode: keep-id
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/stream.conf.d:/etc/nginx/stream.conf.d:ro
       - certs:/etc/nginx/certs:ro
 
   certs:
@@ -94,17 +95,10 @@ services:
     cap_drop:
       - ALL
     command:
-      - "-notify-sighup"
-      - "nginx"
-      - "-watch"
-      # - "-only-exposed"
-      # - "-keep-blank-lines"
-      - "-wait"
-      - "500ms:2s"
+      - "-config"
+      - "/etc/docker-gen/config.toml"
       - "-endpoint"
       - "tcp://dockerproxy:2375"
-      - "/etc/docker-gen/templates/nginx.tmpl" # template
-      - "/etc/nginx/conf.d/dockergen.conf" # target
     container_name: docker-gen
     depends_on:
       dockerproxy:
@@ -127,8 +121,11 @@ services:
     user: "${DOCKERGEN_UID:?error}:${DOCKERGEN_GID:?error}"
     userns_mode: keep-id
     volumes:
+      - ./dockergen/config.toml:/etc/docker-gen/config.toml:ro
       - ./dockergen/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl:ro
+      - ./dockergen/nginx_stream.tmpl:/etc/docker-gen/templates/nginx_stream.tmpl:ro
       - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/stream.conf.d:/etc/nginx/stream.conf.d
       - certs:/etc/nginx/certs:ro
 
   dockerproxy:

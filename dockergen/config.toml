@@ -1,0 +1,14 @@
+[[config]]
+template = "/etc/docker-gen/templates/nginx_stream.tmpl"
+dest = "/etc/nginx/stream.conf.d/dockergen_stream.conf"
+watch = true
+wait = "500ms:2s"
+
+[[config]]
+template = "/etc/docker-gen/templates/nginx.tmpl"
+dest = "/etc/nginx/conf.d/dockergen_http.conf"
+watch = true
+wait = "500ms:2s"
+
+[config.NotifyContainers]
+nginx = 1  # 1 = SIGHUP
