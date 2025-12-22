@@ -301,7 +301,7 @@
         {{- if $value.Entrypoint }}
             {{- $listenPortIpv4 = (atoi $value.Entrypoint) }}
             {{- if eq $listenPortIpv4 0 }}
-# Error: ipv4 listen port {{ $value.Entrypoint }} is not a number
+# Error: ipv4 entrypoint {{ $value.Entrypoint }} is not a number
                 {{- continue }}
             {{- end }}
         {{- end }}
@@ -311,7 +311,7 @@
         {{- if $value.EntrypointIPv6 }}
             {{- $listenPortIpv6 = (atoi $value.EntrypointIPv6) }}
             {{- if eq $listenPortIpv6 0 }}
-# Error: ipv6 listen port {{ $value.EntrypointIPv6 }} is not a number
+# Error: ipv6 entrypoint {{ $value.EntrypointIPv6 }} is not a number
                 {{- continue }}
             {{- end }}
         {{- end }}

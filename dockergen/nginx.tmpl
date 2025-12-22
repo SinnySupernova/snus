@@ -6,12 +6,6 @@
 
 {{- $config := dict }}
 {{- $_ := set $config "allow_published_addresses" ($globals.Env.ALLOW_PUBLISHED_ADDRESSES | default "false" | parseBool) }}
-{{- $_ := set $config "default_entrypoint_ipv4" ($globals.Env.DEFAULT_ENTRYPOINT_IPV4 | default "https") }}
-{{- $_ := set $config "default_entrypoint_ipv6" ($globals.Env.DEFAULT_ENTRYPOINT_IPV6 | default "https") }}
-{{- $_ := set $config "external_http_port" ($globals.Env.HTTP_PORT | default "80") }}
-{{- $_ := set $config "external_https_port" ($globals.Env.HTTPS_PORT | default "443") }}
-{{- $_ := set $config "listen_ipv4" ($globals.Env.LISTEN_IPV4 | default "true" | parseBool) }}
-{{- $_ := set $config "listen_ipv6" ($globals.Env.LISTEN_IPV6 | default "false" | parseBool) }}
 {{- $_ := set $config "default_is_tls" ($globals.Env.DEFAULT_IS_TLS | default "true" | parseBool) }}
 {{- $_ := set $config "enable_http2" ($globals.Env.ENABLE_HTTP2 | default "true" | parseBool) }}
 {{- $_ := set $config "enable_hsts" ($globals.Env.ENABLE_HSTS | default "true" | parseBool) }}
@@ -129,32 +123,6 @@
 
 {{- end }}
 
-{{- /*
-     * Template that transforms input entrypoint to listen port
-     */}}
-{{- define "entrypoint" }}
-    {{- $entrypoint := .entrypoint }}
-    {{- $isIpv6 := .isIpv6 }}
-    {{- $globals := .globals }}
-
-    {{- if not $entrypoint }}
-        {{- if $isIpv6 }}
-            {{- $entrypoint = $globals.config.default_entrypoint_ipv6 }}
-        {{- else }}
-            {{- $entrypoint = $globals.config.default_entrypoint_ipv4 }}
-        {{- end }}
-#   using default entrypoint {{ $entrypoint }}
-    {{- end }}
-
-    {{- if eq $entrypoint "http" }}
-        {{- $entrypoint = $globals.config.external_http_port }}
-    {{- else if eq $entrypoint "https" }}
-        {{- $entrypoint = $globals.config.external_https_port }}
-    {{- end }}
-
-    {{- $_ := set . "listenPort" (atoi $entrypoint) }}
-
-{{- end }}
 
 {{- /*
      * Template that renders properly secure TLS policy
@@ -297,24 +265,20 @@
         {{- end }}
 
         {{- $listenPortIpv4 := 0 }}
-        {{- if or $globals.config.listen_ipv4 $value.Entrypoint }}
-            {{- $args := dict "entrypoint" $value.Entrypoint "isIpv6" false "globals" $globals }}
-            {{- template "entrypoint" $args }}
-            {{- $listenPortIpv4 = $args.listenPort }}
+        {{- if $value.Entrypoint }}
+            {{- $listenPortIpv4 = (atoi $value.Entrypoint) }}
             {{- if eq $listenPortIpv4 0 }}
-# Error: ipv4 entrypoint {{ $value.Entrypoint }} is not "http", "https" or a number
+# Error: ipv4 entrypoint {{ $value.Entrypoint }} is not a number
                 {{- continue }}
             {{- end }}
         {{- end }}
 #   ipv4 listen port: {{ $listenPortIpv4 }}
 
         {{- $listenPortIpv6 := 0 }}
-        {{- if or $globals.config.listen_ipv6 $value.EntrypointIPv6 }}
-            {{- $args := dict "entrypoint" $value.EntrypointIPv6 "isIpv6" true "globals" $globals }}
-            {{- template "entrypoint" $args }}
-            {{- $listenPortIpv6 = $args.listenPort }}
+        {{- if $value.EntrypointIPv6 }}
+            {{- $listenPortIpv6 = (atoi $value.EntrypointIPv6) }}
             {{- if eq $listenPortIpv6 0 }}
-# Error: ipv6 entrypoint {{ $value.EntrypointIPv6 }} is not "http", "https" or a number
+# Error: ipv6 entrypoint {{ $value.EntrypointIPv6 }} is not a number
                 {{- continue }}
             {{- end }}
         {{- end }}
