@@ -563,10 +563,10 @@ server {
 
 
     {{- if $block.ListenPortIPv4 }}
-    listen 127.0.0.1:{{ $block.ListenPortIPv4 }}{{ $tlsString}};
+    listen 127.0.0.1:{{ $block.ListenPortIPv4 }}{{ $tlsString}} proxy_protocol;
     {{- end }}
     {{- if $block.ListenPortIPv6 }}
-    listen [::1]:{{ $block.ListenPortIPv6 }}{{ $tlsString}};
+    listen [::1]:{{ $block.ListenPortIPv6 }}{{ $tlsString}} proxy_protocol;
     {{- end }}
 
 

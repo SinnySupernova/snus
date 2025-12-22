@@ -31,6 +31,9 @@
 {{- end }}
 
 
+{{- $nginxContainerIP := ($globals.NginxContainer.Networks| first ).IP }}
+
+
 {{- /*
      * Template used to merge updates into dict value
      */}}
@@ -477,6 +480,7 @@ server {
     listen {{ $externalPort }};
     ssl_preread on;
     proxy_pass $backend_{{ $externalPort}};
+    proxy_protocol on;
 }
 {{- end }}
 
@@ -531,11 +535,12 @@ upstream {{ $key }} {
     {{- end }}
 server {
     {{- if $block.ListenPortIPv4 }}
-    listen 127.0.0.1:{{ $block.ListenPortIPv4 }};
+    listen 127.0.0.1:{{ $block.ListenPortIPv4 }} proxy_protocol;
     {{- end }}
     {{- if $block.ListenPortIPv6 }}
-    listen [::1]:{{ $block.ListenPortIPv6 }};
+    listen [::1]:{{ $block.ListenPortIPv6 }} proxy_protocol;
     {{- end }}
+    set_real_ip_from {{ $nginxContainerIP }}
     proxy_pass {{ $block.UpstreamName }};
     {{- if $block.IsProxyProtocol }}
     proxy_protocol on;
