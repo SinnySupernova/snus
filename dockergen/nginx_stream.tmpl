@@ -469,7 +469,7 @@ map $ssl_preread_server_name $backend_{{ $externalPort}} {
     {{- if eq $catchAll "" }}
     default reject_backend;
     {{- else }}
-    default backend_{{ $catchAll }};
+    default 127.0.0.1:{{ $catchAll }};
     {{- end }}
 }
 
@@ -501,7 +501,7 @@ map $ssl_preread_server_name $backend_{{ $externalPort}} {
     {{- if eq $catchAll "" }}
     default reject_backend;
     {{- else }}
-    default backend_{{ $catchAll }};
+    default [::1]:{{ $catchAll }};
     {{- end }}
 }
 
