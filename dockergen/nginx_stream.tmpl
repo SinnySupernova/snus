@@ -450,7 +450,8 @@
 
 
 {{- range $externalPort, $upstreamMappings := $prereadMappings }}
-map $ssl_preread_server_name $backend_{{ $externalPort}} {
+server {
+    map $ssl_preread_server_name $backend_{{ $externalPort}} {
     {{- $catchAll := "" }}
     {{- range $prereadMapping := $upstreamMappings }}
     {{- $snis := splitList " " (toString $prereadMapping.SNI) }}
@@ -462,24 +463,18 @@ map $ssl_preread_server_name $backend_{{ $externalPort}} {
 # Error: catch-all service on ext={{ $externalPort }} int={{ $prereadMapping.Port }} will be unreachable because catch-all is already occupied by a service on int={{ $catchAll }}
                 {{- end }}
             {{- else }}
-    {{ $sni }} backend_{{ $prereadMapping.Port }};
+        {{ $sni }} 127.0.0.1:{{ $prereadMapping.Port }};
             {{- end }}
         {{- end }}
     {{- end }}
     {{- if eq $catchAll "" }}
-    default reject_backend;
+        default reject_backend;
     {{- else }}
-    default backend_{{ $catchAll }};
+        default backend_{{ $catchAll }};
     {{- end }}
-}
+    }
 
-{{- range $_, $prereadMapping := $upstreamMappings }}
-upstream backend_{{ $prereadMapping.Port }} {
-    server 127.0.0.1:{{ $prereadMapping.Port }};
-}
-{{- end }}
 
-server {
     listen {{ $externalPort }};
     ssl_preread on;
     proxy_pass $backend_{{ $externalPort}};
@@ -489,20 +484,30 @@ server {
 
 
 {{- range $externalPort, $upstreamMappings := $prereadMappingsIPv6 }}
-map $ssl_preread_server_name $backend_{{ $externalPort}} {
-    {{- range $sni, $prereadMapping := $upstreamMappings }}
-    {{ $sni }} backend_ipv6_{{ $prereadMapping.Port }};
-    default reject_backend;
-    {{- end }}
-}
-
-{{- range $_, $prereadMapping := $upstreamMappings }}
-upstream backend_ipv6_{{ $prereadMapping.Port }} {
-    server [::1]:{{ $prereadMapping.Port }};
-}
-{{- end }}
-
 server {
+    map $ssl_preread_server_name $backend_{{ $externalPort}} {
+    {{- $catchAll := "" }}
+    {{- range $prereadMapping := $upstreamMappings }}
+    {{- $snis := splitList " " (toString $prereadMapping.SNI) }}
+        {{- range $sni := $snis }}
+            {{- if eq $sni "*" }}
+                {{- if eq $catchAll "" }}
+                    {{ $catchAll = $prereadMapping.Port }}
+                {{- else }}
+# Error: catch-all service on ext={{ $externalPort }} int={{ $prereadMapping.Port }} will be unreachable because catch-all is already occupied by a service on int={{ $catchAll }}
+                {{- end }}
+            {{- else }}
+        {{ $sni }} [::1]:{{ $prereadMapping.Port }};
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- if eq $catchAll "" }}
+        default reject_backend;
+    {{- else }}
+        default backend_{{ $catchAll }};
+    {{- end }}
+    }
+
     listen {{ $externalPort }};
     ssl_preread on;
     proxy_pass $backend_{{ $externalPort}};
