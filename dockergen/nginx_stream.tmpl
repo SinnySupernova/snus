@@ -477,7 +477,6 @@ server {
     listen {{ $externalPort }};
     ssl_preread on;
     proxy_pass $backend_{{ $externalPort}};
-    proxy_protocol on;
 }
 {{- end }}
 
@@ -510,7 +509,6 @@ server {
     listen {{ $externalPort }};
     ssl_preread on;
     proxy_pass $backend_{{ $externalPort}};
-    proxy_protocol on;
 }
 {{- end }}
 
