@@ -333,6 +333,9 @@
 
 
         {{- $upstreamName := $value.ServiceName | default $key }}
+        {{- if and $isHttp $value.ServiceName }}
+            {{- $upstreamName = printf "http-%s" $upstreamName }}
+        {{- end }}
 #   upstream name : {{ $upstreamName }}
 
         {{- $service := index $services $upstreamName }}
