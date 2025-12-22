@@ -120,6 +120,34 @@
 {{- end }}
 
 
+{{- /*
+     * Template that adds preread mappings for a port
+     */}}
+{{- define "preread_mappings" }}
+    {{- $isIPv6 := .isIPv6 }}
+    {{- $prereadMappings := .prereadMappings }}
+    {{- $block := .block }}
+    {{- $lastInternalPort := .lastInternalPort }}
+
+    {{- $port := 0 }}
+    {{- if $isIPv6 }}
+        {{- $port = $block.ListenPortIPv6 }}
+    {{- else }}
+        {{- $port = $block.ListenPortIPv4 }}
+    {{- end }}
+    {{- if $port }}
+        {{- $lastInternalPort = add $lastInternalPort 1 }}
+        {{- $internalPortStr := toString $lastInternalPort }}
+
+        {{- template "updDicItmField" (dict "target" $prereadMappings "key" (toString $port) "field" $block.SNI "value" $internalPortStr) }}
+
+        {{- $_ := set . "listenPort" $internalPortStr }}
+    {{- end }}
+
+    {{- $_ := set . "lastInternalPort" $lastInternalPort }}
+{{- end }}
+
+
 {{- $upstreamBlocks := dict }}
 {{- $serverBlocks := dict }}
 
@@ -157,7 +185,31 @@
 
         {{- $split := split $key "." }}
 
-        {{- if (hasPrefix "dockergen.tcp.routers." $key) }}
+
+        {{- if (hasPrefix "dockergen.http.routers." $key) }}
+#   r-key http: {{ $key }}
+            {{ $routerName := index $split 3 }}
+
+            {{- /* docker container IDs are alnum so a dash delimiter works */}}
+            {{ $routerKey := printf "http-%s-%s" $container.Name $routerName }}
+            {{- if and (eq (len $split) 5) (hasSuffix ".server_name" $key) }}
+                {{- $serverName := $value }}
+#   router {{ $routerName }} server_name: {{ $serverName }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServerName" "value" $serverName) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".entrypoint" $key) }}
+                {{- $entrypoint := $value }}
+#   router {{ $routerName }} entrypoint: {{ $entrypoint }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Entrypoint" "value" $entrypoint) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".entrypoint_ipv6" $key) }}
+                {{- $entrypointIpv6 := $value }}
+#   router {{ $routerName }} entrypoint_ipv6: {{ $entrypointIpv6 }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "EntrypointIPv6" "value" $entrypointIpv6) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".service" $key) }}
+                {{- $serviceName := $value }}
+#   router {{ $routerName }} service: {{ $serviceName }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServiceName" "value" (printf "%s-%s" $container.Name $serviceName)) }}
+            {{- end }}
+        {{- else if (hasPrefix "dockergen.tcp.routers." $key) }}
 #   r-key: {{ $key }}
             {{ $routerName := index $split 3 }}
 
@@ -180,6 +232,21 @@
 #   router {{ $routerName }} service: {{ $serviceName }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServiceName" "value" (printf "%s-%s" $container.Name $serviceName)) }}
             {{- end }}
+        {{- else if (hasPrefix "dockergen.http.services." $key) }}
+#   s-key: {{ $key }}
+            {{ $serviceName := index (split $key ".") 3 }}
+
+            {{- /* docker container IDs are alnum so a dash delimiter works */}}
+            {{ $serviceKey := printf "http-%s-%s" $container.Name $serviceName }}
+            {{- if and (eq (len $split) 5) (hasSuffix ".port" $key) }}
+                {{- $port := atoi $value }}
+                {{- if eq $port 0 }}
+# /!\ WARNING: service {{ $serviceName }} port {{ $value }} is invalid
+                {{- else }}
+#   service {{ $serviceName }} port: {{ $port }}
+                    {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "Port" "value" $port) }}
+                {{- end }}
+             {{- end }}
         {{- else if (hasPrefix "dockergen.tcp.services." $key) }}
 #   s-key: {{ $key }}
             {{ $serviceName := index (split $key ".") 3 }}
@@ -198,7 +265,6 @@
                 {{- $isProxyProtocol := $value | default "false" | parseBool }}
                 {{- template "updDicItmField" (dict "target" $services "key" $serviceKey "field" "IsProxyProtocol" "value" $isProxyProtocol) }}
             {{- end }}
-
         {{- end }}
 
     {{- end }}
@@ -217,6 +283,19 @@
     {{- /* compose server blocks */ -}}
     {{- range $key, $value := $routers }}
 #   compose server binding for router {{ $key }}
+
+
+        {{- $isHttp := hasPrefix "http-" $key }}
+
+
+        {{- if not $value.SNI }}
+            {{- if $isHttp }}
+                {{- $_ := set $value "SNI" $value.ServerName }}
+            {{- else }}
+# Warn: no SNI, setting to *
+                {{- $_ := set $value "SNI" "*" }}
+            {{- end }}
+        {{- end }}
 
         {{- $listenPortIpv4 := 0 }}
         {{- if $value.Entrypoint }}
@@ -244,7 +323,12 @@
         {{- end }}
 
 
-        {{- $sbKey := printf "%s-%d-%d" $value.ServerName $listenPortIpv4 $listenPortIpv6 }}
+
+        {{- $sbKeyPrefix := "" }}
+        {{- if $isHttp }}
+            {{- $sbKeyPrefix = "http-" }}
+        {{- end }}
+        {{- $sbKey := printf "%s%s-%d-%d" $sbKeyPrefix $value.SNI $listenPortIpv4 $listenPortIpv6 }}
 #   server block key: {{ $sbKey }}
 
 
@@ -310,7 +394,7 @@
 #   server {{ $sbKey }} upd block {{ $updatedBlock }}
             {{- $serverBlocks = merge $serverBlocks (dict $sbKey $updatedBlock) }}
         {{- else }}
-            {{- $newBlock := dict "ServerName" $value.ServerName "ListenPortIPv4" $listenPortIpv4 "ListenPortIPv6" $listenPortIpv6 "UpstreamName" $upstreamName "IsProxyProtocol" $service.IsProxyProtocol }}
+            {{- $newBlock := dict "SNI" $value.SNI "ListenPortIPv4" $listenPortIpv4 "ListenPortIPv6" $listenPortIpv6 "UpstreamName" $upstreamName "IsProxyProtocol" $service.IsProxyProtocol }}
 #   server {{ $sbKey }} data {{ $newBlock }}
             {{- $serverBlocks = merge $serverBlocks (dict $sbKey $newBlock) }}
         {{- end }}
@@ -321,8 +405,102 @@
 {{- end }}
 
 
+{{- $lastInternalPort := 12000 }}
+{{- $lastInternalPortHttp := 13000 }}
+
+
+{{- /* set up upstream mappings */ -}}
+{{- $prereadMappings := dict }}
+{{- $prereadMappingsIPv6 := dict }}
+{{- range $key, $block := $serverBlocks }}
+
+    {{- $port := 0 }}
+    {{- if hasPrefix "http-" $key }}
+        {{- $port = $lastInternalPortHttp }}
+    {{- else }}
+        {{- $port = $lastInternalPort }}
+    {{- end }}
+
+    {{- $argsIPv4 := dict "isIPv6" false "prereadMappings" $prereadMappings "block" $block "lastInternalPort" $port }}
+    {{- template "preread_mappings" $argsIPv4 }}
+    {{- if hasPrefix "http-" $key }}
+        {{- $lastInternalPortHttp = $argsIPv4.lastInternalPort }}
+    {{- else }}
+        {{- $lastInternalPort = $argsIPv4.lastInternalPort }}
+    {{- end }}
+
+    {{- $argsIPv6 := dict "isIPv6" true "prereadMappings" $prereadMappingsIPv6 "block" $block "lastInternalPort" $port }}
+    {{- template "preread_mappings" $argsIPv6 }}
+    {{- if hasPrefix "http-" $key }}
+        {{- $lastInternalPortHttp = $argsIPv6.lastInternalPort }}
+    {{- else }}
+        {{- $lastInternalPort = $argsIPv6.lastInternalPort }}
+    {{- end }}
+
+    {{- if $argsIPv4.listenPort }}
+        {{- $_ = set $block "ListenPortIPv4" $argsIPv4.listenPort }}
+    {{- end }}
+    {{- if $argsIPv6.listenPort }}
+        {{- $_ = set $block "ListenPortIPv6" $argsIPv6.listenPort }}
+    {{- end }}
+
+{{- end }}
+
+
+{{- range $externalPort, $upstreamMappings := $prereadMappings }}
+map $ssl_preread_server_name $backend_{{ $externalPort}} {
+    {{- range $sni, $internalPort := $upstreamMappings }}
+    {{- $domains := splitList " " $sni }}
+        {{- range $domain := $domains }}
+    {{ $domain }} backend_{{ $internalPort }};
+        {{- end }}
+    {{- end }}
+    default reject_backend;
+}
+
+{{- range $_, $internalPort := $upstreamMappings }}
+upstream backend_{{ $internalPort }} {
+    server 127.0.0.1:{{ $internalPort }};
+}
+{{- end }}
+
+server {
+    listen {{ $externalPort }};
+    ssl_preread on;
+    proxy_pass $backend_{{ $externalPort}};
+    proxy_protocol on;
+}
+{{- end }}
+
+
+{{- range $externalPort, $upstreamMappings := $prereadMappingsIPv6 }}
+map $ssl_preread_server_name $backend_{{ $externalPort}} {
+    {{- range $sni, $internalPort := $upstreamMappings }}
+    {{ $sni }} backend_ipv6_{{ $internalPort }};
+    default reject_backend;
+    {{- end }}
+}
+
+{{- range $_, $internalPort := $upstreamMappings }}
+upstream backend_ipv6_{{ $internalPort }} {
+    server [::1]:{{ $internalPort }};
+}
+{{- end }}
+
+server {
+    listen {{ $externalPort }};
+    ssl_preread on;
+    proxy_pass $backend_{{ $externalPort}};
+    proxy_protocol on;
+}
+{{- end }}
+
+
 {{- /* render the upstream blocks */ -}}
 {{- range $key, $upBlock := $upstreamBlocks }}
+    {{- if hasPrefix "http-" $key }}
+        {{- continue }}
+    {{- end }}
 upstream {{ $key }} {
     server {{ $upBlock.IP }}:{{ $upBlock.Port }};
 }
@@ -331,16 +509,19 @@ upstream {{ $key }} {
 
 {{- /* render the server blocks */ -}}
 {{- range $key, $block := $serverBlocks }}
+    {{- if hasPrefix "http-" $key }}
+        {{- continue }}
+    {{- end }}
 server {
     {{- $proxyProtocolString := "" }}
     {{- if $block.IsProxyProtocol }}
         {{- $proxyProtocolString = " proxy_protocol" }}
     {{- end }}
     {{- if $block.ListenPortIPv4 }}
-    listen {{ $block.ListenPortIPv4 }}{{ $proxyProtocolString}};
+    listen 127.0.0.1:{{ $block.ListenPortIPv4 }}{{ $proxyProtocolString}};
     {{- end }}
     {{- if $block.ListenPortIPv6 }}
-    listen [::]:{{ $block.ListenPortIPv6 }}{{ $proxyProtocolString}};
+    listen [::1]:{{ $block.ListenPortIPv6 }}{{ $proxyProtocolString}};
     {{- end }}
     proxy_pass {{ $block.UpstreamName }};
     {{- if $block.IsProxyProtocol }}
