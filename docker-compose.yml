@@ -38,6 +38,7 @@ services:
       - no-new-privileges:true
     tmpfs:
       - /tmp
+      - /var/log/nginx:U
     user: "${NGINX_UID:?error}:${NGINX_GID:?error}"
     userns_mode: keep-id
     volumes:
