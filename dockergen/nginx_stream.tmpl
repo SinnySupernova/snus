@@ -43,9 +43,11 @@
     {{- if hasKey $target $key }}
         {{- /* update existing */ -}}
         {{- $existingValue := index $target $key }}
-        {{- if ne (index $existingValue $field) $value }}
-            {{- $updatedValue := dict $field $value }}
-            {{- $target = merge $target (dict $key (merge $existingValue $updatedValue)) }}
+        {{- $existingField := index $existingValue $field }}
+        {{- if ne $existingField $value }}
+            {{- $updatedValue := set $existingValue $field $value }}
+            {{- $target = merge $target (dict $key $updatedValue) }}
+        {{- else }}
         {{- end }}
     {{- else }}
         {{- $target = set $target $key (dict $field $value) }}
@@ -134,8 +136,16 @@
         {{- $lastInternalPort = add $lastInternalPort 1 }}
         {{- $internalPortStr := toString $lastInternalPort }}
 
-        {{- template "updDicItmField" (dict "target" $prereadMappings "key" (toString $port) "field" $block.SNI "value" $internalPortStr) }}
+        {{- $prereadMapping := dict "SNI" $block.SNI "Port" $internalPortStr }}
+        {{- $key := toString $port }}
+        {{- $mappingsList := index $prereadMappings $key }}
+        {{- if $mappingsList }}
+            {{- $mappingsList = append $mappingsList $prereadMapping }}
+        {{- else }}
+            {{- $mappingsList = list $prereadMapping}}
+        {{- end }}
 
+        {{- $prereadMappings = set $prereadMappings $key $mappingsList }}
         {{- $_ := set . "listenPort" $internalPortStr }}
     {{- end }}
 
@@ -204,6 +214,7 @@
 #   router {{ $routerName }} service: {{ $serviceName }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServiceName" "value" (printf "%s-%s" $container.Name $serviceName)) }}
             {{- end }}
+            {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Name" "value" $routerName) }}
         {{- else if (hasPrefix "dockergen.tcp.routers." $key) }}
 #   r-key: {{ $key }}
             {{ $routerName := index $split 3 }}
@@ -227,6 +238,7 @@
 #   router {{ $routerName }} service: {{ $serviceName }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServiceName" "value" (printf "%s-%s" $container.Name $serviceName)) }}
             {{- end }}
+            {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Name" "value" $routerName) }}
         {{- else if (hasPrefix "dockergen.http.services." $key) }}
 #   s-key: {{ $key }}
             {{ $serviceName := index (split $key ".") 3 }}
@@ -318,7 +330,7 @@
         {{- end }}
 
 
-        {{- $sbKey := printf "%s%s-%d-%d" (ternary "http-" "" $isHttp) $value.SNI $listenPortIpv4 $listenPortIpv6 }}
+        {{- $sbKey := printf "%s%s-%s-%d-%d" (ternary "http-" "" $isHttp) $value.Name $value.SNI $listenPortIpv4 $listenPortIpv6 }}
 #   server block key: {{ $sbKey }}
 
 
@@ -439,13 +451,26 @@
 
 {{- range $externalPort, $upstreamMappings := $prereadMappings }}
 map $ssl_preread_server_name $backend_{{ $externalPort}} {
-    {{- range $sni, $internalPort := $upstreamMappings }}
-    {{- $domains := splitList " " $sni }}
-        {{- range $domain := $domains }}
-    {{ $domain }} backend_{{ $internalPort }};
+    {{- $catchAll := "" }}
+    {{- range $prereadMapping := $upstreamMappings }}
+    {{- $snis := splitList " " (toString $prereadMapping.SNI) }}
+        {{- range $sni := $snis }}
+            {{- if eq $sni "*" }}
+                {{- if eq $catchAll "" }}
+                    {{ $catchAll = $prereadMapping.Port }}
+                {{- else }}
+# Error: catch-all service on ext={{ $externalPort }} int={{ $prereadMapping.Port }} will be unreachable because catch-all is already occupied by a service on int={{ $catchAll }}
+                {{- end }}
+            {{- else }}
+    {{ $sni }} backend_{{ $prereadMapping.Port }};
+            {{- end }}
         {{- end }}
     {{- end }}
+    {{- if eq $catchAll "" }}
     default reject_backend;
+    {{- else }}
+    default backend_{{ $catchAll }};
+    {{- end }}
 }
 
 {{- range $_, $internalPort := $upstreamMappings }}

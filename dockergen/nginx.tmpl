@@ -47,9 +47,11 @@
     {{- if hasKey $target $key }}
         {{- /* update existing */ -}}
         {{- $existingValue := index $target $key }}
-        {{- if ne (index $existingValue $field) $value }}
-            {{- $updatedValue := dict $field $value }}
-            {{- $target = merge $target (dict $key (merge $existingValue $updatedValue)) }}
+        {{- $existingField := index $existingValue $field }}
+        {{- if ne $existingField $value }}
+            {{- $updatedValue := set $existingValue $field $value }}
+            {{- $target = merge $target (dict $key $updatedValue) }}
+        {{- else }}
         {{- end }}
     {{- else }}
         {{- $target = set $target $key (dict $field $value) }}
@@ -215,7 +217,7 @@
 #   router {{ $routerName }} service: {{ $serviceName }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "ServiceName" "value" (printf "%s-%s" $container.Name $serviceName)) }}
             {{- end }}
-
+            {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Name" "value" $routerName) }}
         {{- else if (hasPrefix "dockergen.http.services." $key) }}
 #   s-key: {{ $key }}
             {{ $serviceName := index (split $key ".") 3 }}
@@ -353,7 +355,7 @@
         {{- end }}
 
 
-        {{- $sbKey := printf "%s-%d-%d" $value.ServerName $listenPortIpv4 $listenPortIpv6 }}
+        {{- $sbKey := printf "%s-%s-%d-%d" $value.Name $value.ServerName $listenPortIpv4 $listenPortIpv6 }}
 #   server block key: {{ $sbKey }}
 
         {{- $path := $value.Path | default "/" }}
