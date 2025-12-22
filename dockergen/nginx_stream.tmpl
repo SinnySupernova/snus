@@ -473,9 +473,9 @@ map $ssl_preread_server_name $backend_{{ $externalPort}} {
     {{- end }}
 }
 
-{{- range $_, $internalPort := $upstreamMappings }}
-upstream backend_{{ $internalPort }} {
-    server 127.0.0.1:{{ $internalPort }};
+{{- range $_, $prereadMapping := $upstreamMappings }}
+upstream backend_{{ $prereadMapping.Port }} {
+    server 127.0.0.1:{{ $prereadMapping.Port }};
 }
 {{- end }}
 
@@ -490,15 +490,15 @@ server {
 
 {{- range $externalPort, $upstreamMappings := $prereadMappingsIPv6 }}
 map $ssl_preread_server_name $backend_{{ $externalPort}} {
-    {{- range $sni, $internalPort := $upstreamMappings }}
-    {{ $sni }} backend_ipv6_{{ $internalPort }};
+    {{- range $sni, $prereadMapping := $upstreamMappings }}
+    {{ $sni }} backend_ipv6_{{ $prereadMapping.Port }};
     default reject_backend;
     {{- end }}
 }
 
-{{- range $_, $internalPort := $upstreamMappings }}
-upstream backend_ipv6_{{ $internalPort }} {
-    server [::1]:{{ $internalPort }};
+{{- range $_, $prereadMapping := $upstreamMappings }}
+upstream backend_ipv6_{{ $prereadMapping.Port }} {
+    server [::1]:{{ $prereadMapping.Port }};
 }
 {{- end }}
 
