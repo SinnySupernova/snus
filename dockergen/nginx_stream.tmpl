@@ -129,12 +129,7 @@
     {{- $block := .block }}
     {{- $lastInternalPort := .lastInternalPort }}
 
-    {{- $port := 0 }}
-    {{- if $isIPv6 }}
-        {{- $port = $block.ListenPortIPv6 }}
-    {{- else }}
-        {{- $port = $block.ListenPortIPv4 }}
-    {{- end }}
+    {{- $port := ternary $block.ListenPortIPv6 $block.ListenPortIPv4 $isIPv6 }}
     {{- if $port }}
         {{- $lastInternalPort = add $lastInternalPort 1 }}
         {{- $internalPortStr := toString $lastInternalPort }}
@@ -323,12 +318,7 @@
         {{- end }}
 
 
-
-        {{- $sbKeyPrefix := "" }}
-        {{- if $isHttp }}
-            {{- $sbKeyPrefix = "http-" }}
-        {{- end }}
-        {{- $sbKey := printf "%s%s-%d-%d" $sbKeyPrefix $value.SNI $listenPortIpv4 $listenPortIpv6 }}
+        {{- $sbKey := printf "%s%s-%d-%d" (ternary "http-" "" $isHttp) $value.SNI $listenPortIpv4 $listenPortIpv6 }}
 #   server block key: {{ $sbKey }}
 
 
@@ -417,24 +407,21 @@
 {{- $prereadMappingsIPv6 := dict }}
 {{- range $key, $block := $serverBlocks }}
 
-    {{- $port := 0 }}
-    {{- if hasPrefix "http-" $key }}
-        {{- $port = $lastInternalPortHttp }}
-    {{- else }}
-        {{- $port = $lastInternalPort }}
-    {{- end }}
+    {{- $isHttp := hasPrefix "http-" $key }}
 
+    {{- $port := ternary $lastInternalPortHttp $lastInternalPort $isHttp }}
     {{- $argsIPv4 := dict "isIPv6" false "prereadMappings" $prereadMappings "block" $block "lastInternalPort" $port }}
     {{- template "preread_mappings" $argsIPv4 }}
-    {{- if hasPrefix "http-" $key }}
+    {{- if $isHttp }}
         {{- $lastInternalPortHttp = $argsIPv4.lastInternalPort }}
     {{- else }}
         {{- $lastInternalPort = $argsIPv4.lastInternalPort }}
     {{- end }}
 
+    {{- $port := ternary $lastInternalPortHttp $lastInternalPort $isHttp }}
     {{- $argsIPv6 := dict "isIPv6" true "prereadMappings" $prereadMappingsIPv6 "block" $block "lastInternalPort" $port }}
     {{- template "preread_mappings" $argsIPv6 }}
-    {{- if hasPrefix "http-" $key }}
+    {{- if $isHttp }}
         {{- $lastInternalPortHttp = $argsIPv6.lastInternalPort }}
     {{- else }}
         {{- $lastInternalPort = $argsIPv6.lastInternalPort }}
@@ -516,10 +503,7 @@ upstream {{ $key }} {
         {{- continue }}
     {{- end }}
 server {
-    {{- $proxyProtocolString := "" }}
-    {{- if $block.IsProxyProtocol }}
-        {{- $proxyProtocolString = " proxy_protocol" }}
-    {{- end }}
+    {{- $proxyProtocolString := ternary " proxy_protocol" "" ($block.IsProxyProtocol | default false) }}
     {{- if $block.ListenPortIPv4 }}
     listen 127.0.0.1:{{ $block.ListenPortIPv4 }}{{ $proxyProtocolString}};
     {{- end }}
