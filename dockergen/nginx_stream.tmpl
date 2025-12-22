@@ -450,8 +450,7 @@
 
 
 {{- range $externalPort, $upstreamMappings := $prereadMappings }}
-server {
-    map $ssl_preread_server_name $backend_{{ $externalPort}} {
+map $ssl_preread_server_name $backend_{{ $externalPort}} {
     {{- $catchAll := "" }}
     {{- range $prereadMapping := $upstreamMappings }}
     {{- $snis := splitList " " (toString $prereadMapping.SNI) }}
@@ -463,18 +462,18 @@ server {
 # Error: catch-all service on ext={{ $externalPort }} int={{ $prereadMapping.Port }} will be unreachable because catch-all is already occupied by a service on int={{ $catchAll }}
                 {{- end }}
             {{- else }}
-        {{ $sni }} 127.0.0.1:{{ $prereadMapping.Port }};
+    {{ $sni }} 127.0.0.1:{{ $prereadMapping.Port }};
             {{- end }}
         {{- end }}
     {{- end }}
     {{- if eq $catchAll "" }}
-        default reject_backend;
+    default reject_backend;
     {{- else }}
-        default backend_{{ $catchAll }};
+    default backend_{{ $catchAll }};
     {{- end }}
-    }
+}
 
-
+server {
     listen {{ $externalPort }};
     ssl_preread on;
     proxy_pass $backend_{{ $externalPort}};
@@ -484,8 +483,7 @@ server {
 
 
 {{- range $externalPort, $upstreamMappings := $prereadMappingsIPv6 }}
-server {
-    map $ssl_preread_server_name $backend_{{ $externalPort}} {
+map $ssl_preread_server_name $backend_{{ $externalPort}} {
     {{- $catchAll := "" }}
     {{- range $prereadMapping := $upstreamMappings }}
     {{- $snis := splitList " " (toString $prereadMapping.SNI) }}
@@ -497,17 +495,18 @@ server {
 # Error: catch-all service on ext={{ $externalPort }} int={{ $prereadMapping.Port }} will be unreachable because catch-all is already occupied by a service on int={{ $catchAll }}
                 {{- end }}
             {{- else }}
-        {{ $sni }} [::1]:{{ $prereadMapping.Port }};
+    {{ $sni }} [::1]:{{ $prereadMapping.Port }};
             {{- end }}
         {{- end }}
     {{- end }}
     {{- if eq $catchAll "" }}
-        default reject_backend;
+    default reject_backend;
     {{- else }}
-        default backend_{{ $catchAll }};
+    default backend_{{ $catchAll }};
     {{- end }}
-    }
+}
 
+server {
     listen {{ $externalPort }};
     ssl_preread on;
     proxy_pass $backend_{{ $externalPort}};
