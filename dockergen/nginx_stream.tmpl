@@ -6,6 +6,8 @@
 
 {{- $config := dict }}
 {{- $_ := set $config "allow_published_addresses" ($globals.Env.ALLOW_PUBLISHED_ADDRESSES | default "false" | parseBool) }}
+{{- $_ := set $config "port_range_start_tcp" (atoi ($globals.Env.INTERNAL_PORT_RANGE_START_TCP | default "12000")) }}
+{{- $_ := set $config "port_range_start_http" (atoi ($globals.Env.INTERNAL_PORT_RANGE_START_HTTP | default "13000")) }}
 
 
 {{- $_ := set $globals "config" $config }}
@@ -29,9 +31,6 @@
 #              See also: <https://github.com/nginx-proxy/docker-gen/issues/458>
 #              and <https://github.com/nginx-proxy/nginx-proxy/issues/2189>.
 {{- end }}
-
-
-{{- $nginxContainerIP := ($globals.NginxContainer.Networks| first ).IP }}
 
 
 {{- /*
@@ -122,37 +121,6 @@
         {{- end }}
     {{- end }}
 
-{{- end }}
-
-
-{{- /*
-     * Template that adds preread mappings for a port
-     */}}
-{{- define "preread_mappings" }}
-    {{- $isIPv6 := .isIPv6 }}
-    {{- $prereadMappings := .prereadMappings }}
-    {{- $block := .block }}
-    {{- $lastInternalPort := .lastInternalPort }}
-
-    {{- $port := ternary $block.ListenPortIPv6 $block.ListenPortIPv4 $isIPv6 }}
-    {{- if $port }}
-        {{- $lastInternalPort = add $lastInternalPort 1 }}
-        {{- $internalPortStr := toString $lastInternalPort }}
-
-        {{- $prereadMapping := dict "SNI" $block.SNI "Port" $internalPortStr }}
-        {{- $key := toString $port }}
-        {{- $mappingsList := index $prereadMappings $key }}
-        {{- if $mappingsList }}
-            {{- $mappingsList = append $mappingsList $prereadMapping }}
-        {{- else }}
-            {{- $mappingsList = list $prereadMapping}}
-        {{- end }}
-
-        {{- $prereadMappings = set $prereadMappings $key $mappingsList }}
-        {{- $_ := set . "listenPort" $internalPortStr }}
-    {{- end }}
-
-    {{- $_ := set . "lastInternalPort" $lastInternalPort }}
 {{- end }}
 
 
@@ -413,107 +381,86 @@
 {{- end }}
 
 
-{{- $lastInternalPort := 12000 }}
-{{- $lastInternalPortHttp := 13000 }}
-
-
 {{- /* set up upstream mappings */ -}}
-{{- $prereadMappings := dict }}
+{{- $prereadMappingsIPv4 := dict }}
 {{- $prereadMappingsIPv6 := dict }}
+{{- $lastInternalPortOffsetTCP := 0 }}
+{{- $listenPortMappingsTCP := dict }}
+{{- $lastInternalPortOffsetHTTP := 0 }}
+{{- $listenPortMappingsHTTP := dict }}
 {{- range $key, $block := $serverBlocks }}
 
     {{- $isHttp := hasPrefix "http-" $key }}
+    {{- $portRangeStart := ternary $config.port_range_start_http $config.port_range_start_tcp $isHttp }}
+    {{- $lastInternalPortOffset := ternary $lastInternalPortOffsetHTTP $lastInternalPortOffsetTCP $isHttp }}
+    {{- $listenPortMappings := ternary $listenPortMappingsHTTP $listenPortMappingsTCP $isHttp }}
 
-    {{- $port := ternary $lastInternalPortHttp $lastInternalPort $isHttp }}
-    {{- $argsIPv4 := dict "isIPv6" false "prereadMappings" $prereadMappings "block" $block "lastInternalPort" $port }}
-    {{- template "preread_mappings" $argsIPv4 }}
-    {{- if $isHttp }}
-        {{- $lastInternalPortHttp = $argsIPv4.lastInternalPort }}
-    {{- else }}
-        {{- $lastInternalPort = $argsIPv4.lastInternalPort }}
-    {{- end }}
+    {{- $mappingItems := list (dict "ExternalPortName" "ListenPortIPv4" "PrereadMappings" $prereadMappingsIPv4) (dict "ExternalPortName" "ListenPortIPv6" "PrereadMappings" $prereadMappingsIPv6) }}
 
-    {{- $port := ternary $lastInternalPortHttp $lastInternalPort $isHttp }}
-    {{- $argsIPv6 := dict "isIPv6" true "prereadMappings" $prereadMappingsIPv6 "block" $block "lastInternalPort" $port }}
-    {{- template "preread_mappings" $argsIPv6 }}
-    {{- if $isHttp }}
-        {{- $lastInternalPortHttp = $argsIPv6.lastInternalPort }}
-    {{- else }}
-        {{- $lastInternalPort = $argsIPv6.lastInternalPort }}
-    {{- end }}
+    {{- range $item := $mappingItems }}
+        {{- $externalPort := get $block $item.ExternalPortName }}
+        {{- if not $externalPort }}
+            {{- continue }}
+        {{- end }}
 
-    {{- if $argsIPv4.listenPort }}
-        {{- $_ = set $block "ListenPortIPv4" $argsIPv4.listenPort }}
-    {{- end }}
-    {{- if $argsIPv6.listenPort }}
-        {{- $_ = set $block "ListenPortIPv6" $argsIPv6.listenPort }}
-    {{- end }}
+        {{- $key := toString $externalPort }}
+        {{- $portOffset := 0 }}
+        {{- if hasKey $listenPortMappings $key }}
+            {{- $portOffset = index $listenPortMappings $key }}
+        {{- else }}
+            {{- $portOffset = add $lastInternalPortOffset 1 }}
+            {{- $portStr := toString $portOffset }}
+            {{- $lastInternalPortOffset = $portOffset }}
+            {{- $listenPortMappings = set $listenPortMappings $key $portOffset }}
+        {{- end }}
+        {{- $internalPort := add $portRangeStart $portOffset }}
+        {{- $_ = set $block $item.ExternalPortName $internalPort }}
 
+        {{- $prereadMapping := dict "SNI" $block.SNI "Port" $internalPort }}
+        {{- $mappingsList := index $item.PrereadMappings $key }}
+        {{- if $mappingsList }}
+            {{- $mappingsList = append $mappingsList $prereadMapping }}
+        {{- else }}
+            {{- $mappingsList = list $prereadMapping}}
+        {{- end }}
+
+        {{- $_ = set $item.PrereadMappings $key $mappingsList }}
+    {{- end }}
 {{- end }}
 
-
-{{- range $externalPort, $upstreamMappings := $prereadMappings }}
-map $ssl_preread_server_name $backend_{{ $externalPort}} {
-    {{- $catchAll := "" }}
-    {{- range $prereadMapping := $upstreamMappings }}
-    {{- $snis := splitList " " (toString $prereadMapping.SNI) }}
-        {{- range $sni := $snis }}
-            {{- if eq $sni "*" }}
-                {{- if eq $catchAll "" }}
-                    {{ $catchAll = $prereadMapping.Port }}
-                {{- else }}
+{{- range $item := list (dict "PrereadMappings" $prereadMappingsIPv4 "LocalAddress" "127.0.0.1" "ListenPrefix" "" "ProxyVarPrefix" "$backend_ipv4_") (dict "PrereadMappings" $prereadMappingsIPv6 "LocalAddress" "[::1]" "ListenPrefix" "[::]:" "ProxyVarPrefix" "$backend_ipv6_") }}
+    {{- range $externalPort, $upstreamMappings := $item.PrereadMappings }}
+map $ssl_preread_server_name {{ $item.ProxyVarPrefix }}{{ $externalPort}} {
+        {{- $catchAll := "" }}
+        {{- range $prereadMapping := $upstreamMappings }}
+        {{- $snis := splitList " " (toString $prereadMapping.SNI) }}
+            {{- range $sni := $snis }}
+                {{- if eq $sni "*" }}
+                    {{- if eq $catchAll "" }}
+                        {{ $catchAll = $prereadMapping.Port }}
+                    {{- else }}
 # Error: catch-all service on ext={{ $externalPort }} int={{ $prereadMapping.Port }} will be unreachable because catch-all is already occupied by a service on int={{ $catchAll }}
+                    {{- end }}
+                {{- else }}
+    {{ $sni }} {{ $item.LocalAddress }}:{{ $prereadMapping.Port }};
                 {{- end }}
-            {{- else }}
-    {{ $sni }} 127.0.0.1:{{ $prereadMapping.Port }};
             {{- end }}
         {{- end }}
-    {{- end }}
-    {{- if eq $catchAll "" }}
+        {{- if eq $catchAll "" }}
     default reject_backend;
-    {{- else }}
-    default 127.0.0.1:{{ $catchAll }};
-    {{- end }}
+        {{- else }}
+    default {{ $item.LocalAddress }}:{{ $catchAll }};
+        {{- end }}
 }
 
 server {
-    listen {{ $externalPort }};
+    listen {{ $item.ListenPrefix }}{{ $externalPort }};
     ssl_preread on;
-    proxy_pass $backend_{{ $externalPort}};
+    proxy_pass {{ $item.ProxyVarPrefix }}{{ $externalPort}};
     proxy_protocol on;
 }
-{{- end }}
-
-
-{{- range $externalPort, $upstreamMappings := $prereadMappingsIPv6 }}
-map $ssl_preread_server_name $backend_{{ $externalPort}} {
-    {{- $catchAll := "" }}
-    {{- range $prereadMapping := $upstreamMappings }}
-    {{- $snis := splitList " " (toString $prereadMapping.SNI) }}
-        {{- range $sni := $snis }}
-            {{- if eq $sni "*" }}
-                {{- if eq $catchAll "" }}
-                    {{ $catchAll = $prereadMapping.Port }}
-                {{- else }}
-# Error: catch-all service on ext={{ $externalPort }} int={{ $prereadMapping.Port }} will be unreachable because catch-all is already occupied by a service on int={{ $catchAll }}
-                {{- end }}
-            {{- else }}
-    {{ $sni }} [::1]:{{ $prereadMapping.Port }};
-            {{- end }}
-        {{- end }}
     {{- end }}
-    {{- if eq $catchAll "" }}
-    default reject_backend;
-    {{- else }}
-    default [::1]:{{ $catchAll }};
-    {{- end }}
-}
 
-server {
-    listen {{ $externalPort }};
-    ssl_preread on;
-    proxy_pass $backend_{{ $externalPort}};
-}
 {{- end }}
 
 
@@ -540,7 +487,6 @@ server {
     {{- if $block.ListenPortIPv6 }}
     listen [::1]:{{ $block.ListenPortIPv6 }} proxy_protocol;
     {{- end }}
-    set_real_ip_from {{ $nginxContainerIP }}
     proxy_pass {{ $block.UpstreamName }};
     {{- if $block.IsProxyProtocol }}
     proxy_protocol on;

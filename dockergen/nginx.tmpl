@@ -10,6 +10,7 @@
 {{- $_ := set $config "enable_http2" ($globals.Env.ENABLE_HTTP2 | default "true" | parseBool) }}
 {{- $_ := set $config "enable_hsts" ($globals.Env.ENABLE_HSTS | default "true" | parseBool) }}
 {{- $_ := set $config "use_modern_tls" ($globals.Env.TLS_PROTOCOLS | default "false" | parseBool) }}
+{{- $_ := set $config "port_range_start_http" (atoi ($globals.Env.INTERNAL_PORT_RANGE_START_HTTP | default "13000")) }}
 
 
 {{- $_ := set $globals "config" $config }}
@@ -460,19 +461,31 @@
 {{- end }}
 
 
-{{- $lastInternalPortHttp := 13000 }}
-
-
 {{- /* set up upstream mappings */ -}}
+{{- $lastInternalPortOffset := 0 }}
+{{- $listenPortMappings := dict }}
 {{- range $key, $block := $serverBlocks }}
 
-    {{- if $block.ListenPortIPv4 }}
-        {{- $lastInternalPortHttp = add $lastInternalPortHttp 1 }}
-        {{- $_ := set $block "ListenPortIPv4" $lastInternalPortHttp }}
-    {{- end }}
-    {{- if $block.ListenPortIPv6 }}
-        {{- $lastInternalPortHttp = add $lastInternalPortHttp 1 }}
-        {{- $_ := set $block "ListenPortIPv6" $lastInternalPortHttp }}
+    {{- $externalPortProperties := list "ListenPortIPv4" "ListenPortIPv6" }}
+
+    {{- range $externalPortProperty := $externalPortProperties }}
+        {{- $externalPort := get $block $externalPortProperty }}
+        {{- if not $externalPort }}
+            {{- continue }}
+        {{- end }}
+
+        {{- $key := toString $externalPort }}
+        {{- $portOffset := 0 }}
+        {{- if hasKey $listenPortMappings $key }}
+            {{- $portOffset = index $listenPortMappings $key }}
+        {{- else }}
+            {{- $portOffset = add $lastInternalPortOffset 1 }}
+            {{- $portStr := toString $portOffset }}
+            {{- $lastInternalPortOffset = $portOffset }}
+            {{- $listenPortMappings = set $listenPortMappings $key $portOffset }}
+        {{- end }}
+        {{- $internalPort := add $config.port_range_start_http $portOffset }}
+        {{- $_ = set $block $externalPortName $internalPort }}
     {{- end }}
 
 {{- end }}
@@ -577,7 +590,7 @@ server {
 
         proxy_pass {{ $location.Scheme }}://{{ $location.UpstreamName }};
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Real-IP $proxy_protocol_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
