@@ -50,16 +50,20 @@ CF_Token = "Y_yourCloudflareTokenGoesIntoThisEnvVarX"
 ## ==================================================== ##
 
 [nginx]
+# git repo to clone
+fork = "https://github.com/nginx/docker-nginx-unprivileged.git"
+# branch or commit to checkout
+branch = "main"
 # git repo download path
 repo = "nginx/repo"
-# subdirectory of https://github.com/nginxinc/docker-nginx-unprivileged
+# subdirectory of https://github.com/nginx/docker-nginx-unprivileged
 flavor = "mainline/alpine-slim"
 # this networking setup allows a few things:
 # - the /24 subnet has 254 usable IP addresses which is enough for most setups
 # - nginx container has a static IP - useful for routing and firewall rules
 # - other containers don't have to have static IPs
-container_ip = "192.168.255.254"
 # 192.168.255.254 is the last usable IP of the subnet 192.168.255.0/24
+container_ip = "192.168.255.254"
 subnet = "192.168.255.0/24"
 # uid and gid for the user in the certs container
 uid = 12000
@@ -71,7 +75,17 @@ acmesh_repo = "certs/acmesh/repo"
 uid = 12100
 gid = 12100
 
+[certs.acmed]
+fork = "https://github.com/breard-r/acmed.git"
+branch = "main"
+
+[certs.acmesh]
+fork = "https://github.com/acmesh-official/acme.sh.git"
+branch = "master"
+
 [dockergen]
+fork = "https://github.com/nginx-proxy/docker-gen.git"
+branch = "main"
 repo = "dockergen/repo"
 uid = 12200
 gid = 12200

@@ -48,13 +48,13 @@ check-config: update-tq
 
 update-nginx: check-config
 	@echo "Updating nginx"
-	@scripts/update_repo.sh "$(call get_config_value,nginx.repo)" "https://github.com/nginxinc/docker-nginx-unprivileged.git"
+	@scripts/update_repo.sh "$(call get_config_value,nginx.repo)" "$(call get_config_value,nginx.fork)" "$(call get_config_value,nginx.branch)"
 	@echo "Updating nginx file permissions"
 	@scripts/set_permissions_nginx.sh "$(call get_config_value,nginx.gid)"
 
 update-acmed: check-config
 	@echo "Updating acmed"
-	@scripts/update_repo.sh "$(call get_config_value,certs.acmed_repo)" "https://github.com/breard-r/acmed.git"
+	@scripts/update_repo.sh "$(call get_config_value,certs.acmed_repo)" "$(call get_config_value,certs.acmed.fork)" "$(call get_config_value,certs.acmed.branch)"
 	@cp ./certs/acmed/acmed.Dockerfile "$(call get_config_value,certs.acmed_repo)" # TODO rewrite it in rust
 	@echo "Generating acmed config"
 	@scripts/generate_acmed_config.sh "$(CONTAINER_RUNTIME)"
@@ -63,11 +63,11 @@ update-acmed: check-config
 
 update-acmesh: check-config
 	@echo "Updating acme.sh"
-	@scripts/update_repo.sh "$(call get_config_value,certs.acmesh_repo)" "https://github.com/acmesh-official/acme.sh.git"
+	@scripts/update_repo.sh "$(call get_config_value,certs.acmesh_repo)" "$(call get_config_value,certs.acmesh.fork)" "$(call get_config_value,certs.acmesh.branch)"
 
 update-dockergen: check-config
 	@echo "Updating dockergen"
-	@scripts/update_repo.sh "$(call get_config_value,dockergen.repo)" "https://github.com/nginx-proxy/docker-gen.git"
+	@scripts/update_repo.sh "$(call get_config_value,dockergen.repo)" "$(call get_config_value,dockergen.fork)" "$(call get_config_value,dockergen.branch)"
 	@echo "Updating dockergen file permissions"
 	@scripts/set_permissions_dockergen.sh "$(call get_config_value,dockergen.gid)"
 	@echo "Removing old dockergen configs"

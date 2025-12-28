@@ -74,19 +74,25 @@ destroys the containers and the volumes
 
 #### `make update-nginx`
 
-pulls updates from the [nginx git repo](https://github.com/nginxinc/docker-nginx-unprivileged)
+pulls updates from the **nginx** git repo (configurable, [this one by default](https://github.com/nginx/docker-nginx-unprivileged))
 
 this runs automatically during `make init`
 
 #### `make update-acmed`
 
-pulls updates from the [acmed git repo](https://github.com/breard-r/acmed)
+pulls updates from the **acmed** git repo (configurable, [this one by default](https://github.com/breard-r/acmed))
+
+this runs automatically during `make init`
+
+#### `make update-acmesh`
+
+pulls updates from the **acme.sh** git repo (configurable, [this one by default](https://github.com/acmesh-official/acme.sh))
 
 this runs automatically during `make init`
 
 #### `make update-dockergen`
 
-pulls updates from the [dockergen git repo](https://github.com/nginx-proxy/docker-gen)
+pulls updates from the **docker-gen** git repo (configurable, [this one by default](https://github.com/nginx-proxy/docker-gen))
 
 this runs automatically during `make init`
 
@@ -108,7 +114,23 @@ if that alone doesn't help, run `systemctl --user start dbus` as well
 
 **Q:** the following error happens during updating docker sock gid stage: `Error: Podman socket does not exist`  
 **A:** if you're running rootless `podman` you need to make sure that Podman socket service is enabled for your user;  
-on systemd systems this can be done by running `systemctl --user enable --now podman.socket`
+on systems with `systemd` this can be done by running `systemctl --user enable --now podman.socket`  
+on systems without `systemd` you'll need to run:
+```sh
+PODMAN_SOCK_PATH=$(podman info --format "{{.Host.RemoteSocket.Path}}")
+mkdir -p $(dirname "$PODMAN_SOCK_PATH")
+podman system service -t 0 unix://"$PODMAN_SOCK_PATH"
+```
+and make sure that podman socket has 660 permissions `chmod 660 $PODMAN_SOCK_PATH`
+or create a user service that performs the equivalent
+
+---
+
+**Q:** error like this appears during any operation `Error: Could not find pattern xxx.yyy`  
+**A:** new entries got added to the default config, please execute:
+- run `mv config.toml config.toml.bak` to backup your current `config.toml`
+- run `make config` to regenerate the default config
+- apply the required changes to the newly generated `config.toml` (sorry, there is no automated way to do that)
 
 ---
 
