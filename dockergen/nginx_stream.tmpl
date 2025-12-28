@@ -447,7 +447,7 @@ map $ssl_preread_server_name {{ $item.ProxyVarPrefix }}{{ $externalPort}} {
             {{- end }}
         {{- end }}
         {{- if eq $catchAll "" }}
-    default reject_backend;
+    default reject_backend_proxy;
         {{- else }}
     default {{ $item.LocalAddress }}:{{ $catchAll }};
         {{- end }}

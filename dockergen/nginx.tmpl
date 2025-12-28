@@ -550,6 +550,50 @@ upstream {{ $key }} {
 }
 {{- end }}
 
+{{- /* render default servers for each port */ -}}
+{{- $mappedPortsIPv6 := list }}
+{{- $mappedPortsIPv4 := list }}
+{{- range $key, $block := $serverBlocks }}
+
+    {{- $items := list }}
+    {{- if and $block.ListenPortIPv6 (not (has $block.ListenPortIPv6 $mappedPortsIPv6)) }}
+        {{ $items = append $items (dict "IsIPv6" true "ExternalPort" $block.ListenPortIPv6) }}
+    {{- end }}
+    {{- if and $block.ListenPortIPv4 (not (has $block.ListenPortIPv4 $mappedPortsIPv4)) }}
+        {{ $items = append $items (dict "IsIPv6" false "ExternalPort" $block.ListenPortIPv4) }}
+    {{- end }}
+
+    {{ range $item := $items }}
+        {{- if $item.IsIPv6 }}
+            {{ $mappedPortsIPv6 = append $mappedPortsIPv6 $item.ExternalPort }}
+        {{- else }}
+            {{ $mappedPortsIPv4 = append $mappedPortsIPv4 $item.ExternalPort }}
+        {{- end }}
+server {
+    server_name _;
+
+        {{- $tlsString := "" }}
+        {{- if $block.IsTLS }}
+            {{- $tlsString = " ssl" }}
+
+            {{- template "tls_policy" (dict "modern" $globals.config.use_modern_tls) }}
+
+    ssl_certificate {{ $block.TlsCertCrt }};
+    ssl_certificate_key {{ $block.TlsCertKey }};
+
+            {{- if $globals.config.enable_hsts }}
+    # HSTS (ngx_http_headers_module is required) (63072000 seconds)
+    add_header Strict-Transport-Security "max-age=63072000" always;
+            {{- end }}
+        {{- end }}
+
+        {{- $listenPrefix := ternary "[::1]" "127.0.0.1" $item.IsIPv6 }}
+    listen {{ $listenPrefix }}:{{ $block.ListenPortIPv6 }}{{ $tlsString }} proxy_protocol default_server;
+    return 444;
+}
+    {{- end }}
+{{- end }}
+
 {{- /* render the server blocks */ -}}
 {{- range $key, $block := $serverBlocks }}
 server {

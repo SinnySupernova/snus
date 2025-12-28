@@ -4,11 +4,8 @@
 
 # nginx
 /nginx/.nginx-ports.yml
-/nginx/conf.d/*
-!/nginx/conf.d/default.conf
-!/nginx/conf.d/health.conf
-!/nginx/conf.d/reject.conf
-/nginx/stream-conf.d
+/nginx/conf.d/dockergen_*
+/nginx/stream-conf.d/dockergen_*
 
 # acmed
 /certs/acmed/acmed.toml
