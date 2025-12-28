@@ -588,7 +588,7 @@ server {
         {{- end }}
 
         {{- $listenPrefix := ternary "[::1]" "127.0.0.1" $item.IsIPv6 }}
-    listen {{ $listenPrefix }}:{{ $block.ListenPortIPv6 }}{{ $tlsString }} proxy_protocol default_server;
+    listen {{ $listenPrefix }}:{{ $item.ExternalPort }}{{ $tlsString }} proxy_protocol default_server;
     return 444;
 }
     {{- end }}
