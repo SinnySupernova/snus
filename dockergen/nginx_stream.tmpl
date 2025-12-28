@@ -437,7 +437,7 @@ map $ssl_preread_server_name {{ $item.ProxyVarPrefix }}{{ $externalPort}} {
             {{- range $sni := $snis }}
                 {{- if eq $sni "*" }}
                     {{- if eq $catchAll "" }}
-                        {{ $catchAll = $prereadMapping.Port }}
+                        {{ $catchAll = toString $prereadMapping.Port }}
                     {{- else }}
 # Error: catch-all service on ext={{ $externalPort }} int={{ $prereadMapping.Port }} will be unreachable because catch-all is already occupied by a service on int={{ $catchAll }}
                     {{- end }}
