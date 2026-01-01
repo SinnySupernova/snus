@@ -384,15 +384,13 @@
 {{- /* set up upstream mappings */ -}}
 {{- $prereadMappingsIPv4 := dict }}
 {{- $prereadMappingsIPv6 := dict }}
-{{- $lastInternalPortOffsetTCP := 0 }}
+{{- $lastInternalPortOffsets := dict "TCP" 0 "HTTP" 0 }}
 {{- $listenPortMappingsTCP := dict }}
-{{- $lastInternalPortOffsetHTTP := 0 }}
 {{- $listenPortMappingsHTTP := dict }}
 {{- range $key, $block := $serverBlocks }}
 
     {{- $isHttp := hasPrefix "http-" $key }}
     {{- $portRangeStart := ternary $config.port_range_start_http $config.port_range_start_tcp $isHttp }}
-    {{- $lastInternalPortOffset := ternary $lastInternalPortOffsetHTTP $lastInternalPortOffsetTCP $isHttp }}
     {{- $listenPortMappings := ternary $listenPortMappingsHTTP $listenPortMappingsTCP $isHttp }}
 
     {{- $mappingItems := list (dict "ExternalPortName" "ListenPortIPv4" "PrereadMappings" $prereadMappingsIPv4) (dict "ExternalPortName" "ListenPortIPv6" "PrereadMappings" $prereadMappingsIPv6) }}
@@ -408,13 +406,13 @@
         {{- if hasKey $listenPortMappings $key }}
             {{- $portOffset = index $listenPortMappings $key }}
         {{- else }}
-            {{- $portOffset = add $lastInternalPortOffset 1 }}
-            {{- $portStr := toString $portOffset }}
-            {{- $lastInternalPortOffset = $portOffset }}
+            {{- $lastOffsetKey := ternary "HTTP" "TCP" $isHttp }}
+            {{- $portOffset = add (get $lastInternalPortOffsets $lastOffsetKey) 1 }}
+            {{- $lastInternalPortOffsets = set $lastInternalPortOffsets $lastOffsetKey $portOffset }}
             {{- $listenPortMappings = set $listenPortMappings $key $portOffset }}
         {{- end }}
         {{- $internalPort := add $portRangeStart $portOffset }}
-        {{- $_ = set $block $item.ExternalPortName $internalPort }}
+        {{- $_ := set $block $item.ExternalPortName $internalPort }}
 
         {{- $prereadMapping := dict "SNI" $block.SNI "Port" $internalPort }}
         {{- $mappingsList := index $item.PrereadMappings $key }}
@@ -424,7 +422,7 @@
             {{- $mappingsList = list $prereadMapping}}
         {{- end }}
 
-        {{- $_ = set $item.PrereadMappings $key $mappingsList }}
+        {{- $_ := set $item.PrereadMappings $key $mappingsList }}
     {{- end }}
 {{- end }}
 
@@ -481,6 +479,9 @@ upstream {{ $key }} {
         {{- continue }}
     {{- end }}
 server {
+    {{- if not (eq $block.SNI "*") }}
+    server_name {{ $block.SNI }}
+    {{- end }}
     {{- if $block.ListenPortIPv4 }}
     listen 127.0.0.1:{{ $block.ListenPortIPv4 }} proxy_protocol;
     {{- end }}

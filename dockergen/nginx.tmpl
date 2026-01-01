@@ -480,7 +480,6 @@
             {{- $portOffset = index $listenPortMappings $key }}
         {{- else }}
             {{- $portOffset = add $lastInternalPortOffset 1 }}
-            {{- $portStr := toString $portOffset }}
             {{- $lastInternalPortOffset = $portOffset }}
             {{- $listenPortMappings = set $listenPortMappings $key $portOffset }}
         {{- end }}
