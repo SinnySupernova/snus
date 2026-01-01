@@ -6,6 +6,7 @@
 
 {{- $config := dict }}
 {{- $_ := set $config "allow_published_addresses" ($globals.Env.ALLOW_PUBLISHED_ADDRESSES | default "false" | parseBool) }}
+{{- $_ := set $config "default_is_tls" ($globals.Env.DEFAULT_TLS_ENABLED_TCP | default "true" | parseBool) }}
 {{- $_ := set $config "port_range_start_tcp" (atoi ($globals.Env.INTERNAL_PORT_RANGE_START_TCP | default "12000")) }}
 {{- $_ := set $config "port_range_start_http" (atoi ($globals.Env.INTERNAL_PORT_RANGE_START_HTTP | default "13000")) }}
 
@@ -124,6 +125,25 @@
 {{- end }}
 
 
+{{- /*
+     * Template that renders properly secure TLS policy
+     */}}
+{{- define "tls_policy" }}
+    {{- if .modern }}
+    # https://ssl-config.mozilla.org/#server=nginx&version=1.27.3&config=modern&openssl=3.4.0&guideline=5.7
+    ssl_protocols TLSv1.3;
+    ssl_ecdh_curve X25519:prime256v1:secp384r1;
+    ssl_prefer_server_ciphers off;
+    {{- else }}
+    # https://ssl-config.mozilla.org/#server=nginx&version=1.27.3&config=intermediate&openssl=3.4.0&guideline=5.7
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ecdh_curve X25519:prime256v1:secp384r1;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;
+    {{- end }}
+{{- end }}
+
+
 {{- $upstreamBlocks := dict }}
 {{- $serverBlocks := dict }}
 
@@ -204,6 +224,14 @@
                 {{- $entrypointIpv6 := $value }}
 #   router {{ $routerName }} entrypoint_ipv6: {{ $entrypointIpv6 }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "EntrypointIPv6" "value" $entrypointIpv6) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".tls" $key) }}
+                {{- $isTls := $value | parseBool }}
+#   router {{ $routerName }} isTls: {{ $isTls }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "IsTLS" "value" $isTls) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".cert_name" $key) }}
+                {{- $certName := $value }}
+#   router {{ $routerName }} cert_name: {{ $certName }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "CertName" "value" $certName) }}
             {{- else if and (eq (len $split) 5) (hasSuffix ".service" $key) }}
                 {{- $serviceName := $value }}
 #   router {{ $routerName }} service: {{ $serviceName }}
@@ -300,6 +328,73 @@
             {{- continue }}
         {{- end }}
 
+        {{- $isTls := ternary false $value.IsTLS $isHttp }}
+        {{- if and (ne $isTls false) (eq $globals.config.default_is_tls true) }}
+            {{ $isTls = true }}
+        {{- end }}
+
+        {{- $certCrt := "" }}
+        {{- $certKey := "" }}
+        {{- if $isTls }}
+#   checking TLS certs
+
+            {{- $cert := $value.CertName }}
+            {{- if not $cert }}
+#   using server name as cert name: {{ $value.ServerName }}
+                {{- $cert = $value.ServerName }}
+            {{- end }}
+
+            {{- /* define filename suffixes to try */ -}}
+            {{- $bases := list
+                $cert
+                (printf "%s-staging" $cert)
+                (printf "%s-production" $cert)
+                (printf "*.%s" $cert)
+                (printf "*.%s-staging" $cert)
+                (printf "*.%s-production" $cert)
+            -}}
+
+            {{- /* define filename extensions to try */ -}}
+            {{- $crtExts := list
+                ".crt"
+                ".crt.pem"
+            -}}
+            {{- $keyExts := list
+                ".key"
+                ".key.pem"
+                ".pk"
+                ".pk.pem"
+            -}}
+
+            {{- range $b := $bases -}}
+                {{- if eq $certCrt "" -}}
+                    {{- range $ext := $crtExts -}}
+                        {{- $path := printf "/etc/nginx/certs/%s%s" $b $ext -}}
+                        {{- if exists $path -}}
+                            {{- $certCrt = $path -}}
+                        {{- end -}}
+                    {{- end -}}
+                {{- end -}}
+            {{- end -}}
+
+            {{- range $b := $bases -}}
+                {{- if eq $certKey "" -}}
+                    {{- range $ext := $keyExts -}}
+                        {{- $path := printf "/etc/nginx/certs/%s%s" $b $ext -}}
+                        {{- if exists $path -}}
+                            {{- $certKey = $path -}}
+                        {{- end -}}
+                    {{- end -}}
+                {{- end -}}
+            {{- end -}}
+
+            {{- if or (empty $certCrt) (empty $certKey) }}
+# Error: TLS certs cannot be found. Exist: crt = {{ not (empty $certCrt) }}, key = {{ not (empty $certKey) }}
+                {{- continue }}
+            {{- end }}
+
+        {{- end }}
+
 
         {{- $sbKey := printf "%s%s-%s-%d-%d" (ternary "http-" "" $isHttp) $value.Name $value.SNI $listenPortIpv4 $listenPortIpv6 }}
 #   server block key: {{ $sbKey }}
@@ -371,6 +466,11 @@
             {{- $serverBlocks = merge $serverBlocks (dict $sbKey $updatedBlock) }}
         {{- else }}
             {{- $newBlock := dict "SNI" $value.SNI "ListenPortIPv4" $listenPortIpv4 "ListenPortIPv6" $listenPortIpv6 "UpstreamName" $upstreamName "IsProxyProtocol" $service.IsProxyProtocol }}
+            {{- $newBlock = set $newBlock "IsTLS" $isTls }}
+            {{- if $isTls }}
+                {{- $newBlock = set $newBlock "TlsCertCrt" $certCrt }}
+                {{- $newBlock = set $newBlock "TlsCertKey" $certKey }}
+            {{- end }}
 #   server {{ $sbKey }} data {{ $newBlock }}
             {{- $serverBlocks = merge $serverBlocks (dict $sbKey $newBlock) }}
         {{- end }}
@@ -479,11 +579,21 @@ upstream {{ $key }} {
         {{- continue }}
     {{- end }}
 server {
-    {{- if not (eq $block.SNI "*") }}
+    {{- if ne $block.SNI "*" }}
     server_name {{ $block.SNI }};
     {{- end }}
+
+    {{- $tlsString := "" }}
+    {{- if $block.IsTLS }}
+        {{- $tlsString = " ssl" }}
+        {{- template "tls_policy" (dict "modern" $globals.config.use_modern_tls) }}
+
+    ssl_certificate {{ $block.TlsCertCrt }};
+    ssl_certificate_key {{ $block.TlsCertKey }};
+    {{- end }}
+
     {{- if $block.ListenPortIPv4 }}
-    listen 127.0.0.1:{{ $block.ListenPortIPv4 }} proxy_protocol;
+    listen 127.0.0.1:{{ $block.ListenPortIPv4 }}{{ $tlsString }} proxy_protocol;
     {{- end }}
     {{- if $block.ListenPortIPv6 }}
     listen [::1]:{{ $block.ListenPortIPv6 }} proxy_protocol;

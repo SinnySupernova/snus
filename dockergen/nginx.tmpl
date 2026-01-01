@@ -6,7 +6,7 @@
 
 {{- $config := dict }}
 {{- $_ := set $config "allow_published_addresses" ($globals.Env.ALLOW_PUBLISHED_ADDRESSES | default "false" | parseBool) }}
-{{- $_ := set $config "default_is_tls" ($globals.Env.DEFAULT_IS_TLS | default "true" | parseBool) }}
+{{- $_ := set $config "default_is_tls" ($globals.Env.DEFAULT_TLS_ENABLED_HTTP | default "true" | parseBool) }}
 {{- $_ := set $config "enable_http2" ($globals.Env.ENABLE_HTTP2 | default "true" | parseBool) }}
 {{- $_ := set $config "enable_hsts" ($globals.Env.ENABLE_HSTS | default "true" | parseBool) }}
 {{- $_ := set $config "use_modern_tls" ($globals.Env.TLS_PROTOCOLS | default "false" | parseBool) }}
@@ -197,10 +197,6 @@
                 {{- $entrypoint := $value }}
 #   router {{ $routerName }} entrypoint: {{ $entrypoint }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "Entrypoint" "value" $entrypoint) }}
-            {{- else if and (eq (len $split) 5) (hasSuffix ".cert_name" $key) }}
-                {{- $certName := $value }}
-#   router {{ $routerName }} cert_name: {{ $certName }}
-                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "CertName" "value" $certName) }}
             {{- else if and (eq (len $split) 5) (hasSuffix ".entrypoint_ipv6" $key) }}
                 {{- $entrypointIpv6 := $value }}
 #   router {{ $routerName }} entrypoint_ipv6: {{ $entrypointIpv6 }}
@@ -209,6 +205,10 @@
                 {{- $isTls := $value | parseBool }}
 #   router {{ $routerName }} isTls: {{ $isTls }}
                 {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "IsTLS" "value" $isTls) }}
+            {{- else if and (eq (len $split) 5) (hasSuffix ".cert_name" $key) }}
+                {{- $certName := $value }}
+#   router {{ $routerName }} cert_name: {{ $certName }}
+                {{- template "updDicItmField" (dict "target" $routers "key" $routerKey "field" "CertName" "value" $certName) }}
             {{- else if and (eq (len $split) 5) (hasSuffix ".path" $key) }}
                 {{- $path := $value }}
 #   router {{ $routerName }} path: {{ $path }}
@@ -292,7 +292,11 @@
             {{- continue }}
         {{- end }}
 
-        {{- $isTls := $value.IsTLS | default $globals.config.default_is_tls }}
+        {{- $isTls := $value.IsTLS }}
+        {{- if and (ne $isTls false) (eq $globals.config.default_is_tls true) }}
+            {{ $isTls = true }}
+        {{- end }}
+
         {{- $certCrt := "" }}
         {{- $certKey := "" }}
         {{- if $isTls }}
