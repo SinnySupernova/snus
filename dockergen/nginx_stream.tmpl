@@ -480,7 +480,7 @@ upstream {{ $key }} {
     {{- end }}
 server {
     {{- if not (eq $block.SNI "*") }}
-    server_name {{ $block.SNI }}
+    server_name {{ $block.SNI }};
     {{- end }}
     {{- if $block.ListenPortIPv4 }}
     listen 127.0.0.1:{{ $block.ListenPortIPv4 }} proxy_protocol;
