@@ -45,7 +45,6 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/stream-conf.d:/etc/nginx/stream-conf.d:ro
       - certs:/etc/nginx/certs:ro
-      - nginx-logs:/var/log/nginx
 
   certs:
     image: "acmed:local"
@@ -195,8 +194,3 @@ volumes:
       type: tmpfs
       device: tmpfs
       o: uid=${CERTS_UID:?error},gid=${CERTS_GID:?error},mode=0700
-  nginx-logs:
-    driver_opts:
-      type: tmpfs
-      device: tmpfs
-      o: uid=${NGINX_UID:?error},gid=${NGINX_GID:?error},mode=0750
