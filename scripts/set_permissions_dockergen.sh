@@ -13,5 +13,5 @@ setfacl -m g:${DOCKERGEN_GID}:r ./dockergen/nginx.tmpl
 for dir in ./nginx/conf.d ./nginx/stream-conf.d; do
     setfacl -m g::rwX "$dir"
     setfacl -dm g:${DOCKERGEN_GID}:rwX "$dir"
-    setfacl -Rdm u:$(id -g):rw "$dir"
+    setfacl -Rdm u:$(id -g):rwX "$dir"
 done

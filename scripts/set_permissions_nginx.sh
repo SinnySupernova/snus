@@ -10,7 +10,8 @@ if [ -z "${NGINX_GID}" ]; then
 fi
 
 for dir in ./nginx/conf.d ./nginx/stream-conf.d; do
-    setfacl -m g:${NGINX_GID}:r "$dir"
-    find "$dir" -type f -user $(id -u) -exec setfacl -m g:${NGINX_GID}:r {} \;
-    setfacl -dm g:${NGINX_GID}:r "$dir"
+    setfacl -m g::rX "$dir"
+    setfacl -m g:${NGINX_GID}:rX "$dir"
+    find "$dir" -type f -user $(id -u) -exec setfacl -m g:${NGINX_GID}:rX {} \;
+    setfacl -dm g:${NGINX_GID}:rX "$dir"
 done
