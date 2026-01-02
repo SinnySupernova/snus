@@ -558,19 +558,19 @@ upstream {{ $key }} {
 {{- $mappedPortsIPv4 := list }}
 {{- range $key, $block := $serverBlocks }}
 
-    {{- $items := list }}
+    {{- $familyIsIPv6Bools := list }}
     {{- if and $block.ListenPortIPv6 (not (has $block.ListenPortIPv6 $mappedPortsIPv6)) }}
-        {{ $items = append $items (dict "IsIPv6" true "ExternalPort" $block.ListenPortIPv6) }}
+        {{ $familyIsIPv6Bools = append $familyIsIPv6Bools true }}
     {{- end }}
     {{- if and $block.ListenPortIPv4 (not (has $block.ListenPortIPv4 $mappedPortsIPv4)) }}
-        {{ $items = append $items (dict "IsIPv6" false "ExternalPort" $block.ListenPortIPv4) }}
+        {{ $familyIsIPv6Bools = append $familyIsIPv6Bools false }}
     {{- end }}
 
-    {{ range $item := $items }}
-        {{- if $item.IsIPv6 }}
-            {{ $mappedPortsIPv6 = append $mappedPortsIPv6 $item.ExternalPort }}
+    {{ range $isIPv6 := $familyIsIPv6Bools }}
+        {{- if $isIPv6 }}
+            {{ $mappedPortsIPv6 = append $mappedPortsIPv6 $block.ListenPortIPv6 }}
         {{- else }}
-            {{ $mappedPortsIPv4 = append $mappedPortsIPv4 $item.ExternalPort }}
+            {{ $mappedPortsIPv4 = append $mappedPortsIPv4 $block.ListenPortIPv4 }}
         {{- end }}
 server {
     server_name _;
@@ -590,8 +590,9 @@ server {
             {{- end }}
         {{- end }}
 
-        {{- $listenPrefix := ternary "[::1]" "127.0.0.1" $item.IsIPv6 }}
-    listen {{ $listenPrefix }}:{{ $item.ExternalPort }}{{ $tlsString }} proxy_protocol default_server;
+        {{- $listenHost := ternary "[::1]" "127.0.0.1" $isIPv6 }}
+        {{- $listenPort := ternary $block.ListenPortIPv6 $block.ListenPortIPv4 $isIPv6 }}
+    listen {{ $listenHost }}:{{ $listenPort }}{{ $tlsString }} proxy_protocol default_server;
     return 444;
 }
     {{- end }}
