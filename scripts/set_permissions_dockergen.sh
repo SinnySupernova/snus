@@ -9,9 +9,9 @@ if [ -z "${DOCKERGEN_GID}" ]; then
     exit 1
 fi
 
-setfacl -m g:${DOCKERGEN_GID}:r ./dockergen/nginx.tmpl
+setfacl -m g:${DOCKERGEN_GID}:r ./dockergen/nginx*.tmpl # r on templates
 for dir in ./nginx/conf.d ./nginx/stream-conf.d; do
-    setfacl -m g::rwX "$dir"
-    setfacl -dm g:${DOCKERGEN_GID}:rwX "$dir"
-    setfacl -Rdm u:$(id -g):rwX "$dir"
+    setfacl -m g:${DOCKERGEN_GID}:rwX "$dir" # rwX on the dir
+    setfacl -dm g:${DOCKERGEN_GID}:rwX "$dir" # rwX on new files in the dir
+    setfacl -Rdm u:$(id -g):rwX "$dir" # rwX on new files in the dir for the host user
 done
