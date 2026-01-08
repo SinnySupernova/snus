@@ -1,8 +1,10 @@
 ifeq (,$(filter $(CONTAINER_RUNTIME),podman docker))
     ifneq ($(shell command -v podman 2>/dev/null),)
         CONTAINER_RUNTIME := podman
+        COMPOSE_ENV := PODMAN_COMPOSE_PROVIDER=docker-compose
     else ifneq ($(shell command -v docker 2>/dev/null),)
         CONTAINER_RUNTIME := docker
+        COMPOSE_ENV :=
     else
         $(error No container runtime found: neither 'podman' nor 'docker' commands are available)
     endif
@@ -21,6 +23,7 @@ export TQ_CMD := $(CONTAINER_RUNTIME) run --rm -u $(shell id -u):$(shell id -g) 
 
 COMPOSE_FILES = -f "docker-compose.yml" -f "nginx/.nginx-ports.yml"
 COMPOSE_ENV_FILES = --env-file="./env/.env.compose" --env-file="./env/.env.docker_sock"
+COMPOSE_COMMAND = $(COMPOSE_ENV) $(CONTAINER_RUNTIME) compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES)
 
 define get_config_value
 $(shell $(TQ_CMD) tq -r '$(1)' < "$(CONFIG_FILE)")
@@ -90,7 +93,7 @@ init: check-config update-nginx update-acmed update-acmesh update-dockergen gene
 normalize-compose: check-config generate-nginx-ports generate-compose-env
 	@echo "Emitting normalized compose file"
 	@scripts/ensure_docker_compose_v5.sh
-	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) config > normalized-compose.yml
+	@$(COMPOSE_COMMAND) config > normalized-compose.yml
 
 systemd: normalize-compose
 	@echo "Generating systemd files"
@@ -98,20 +101,20 @@ systemd: normalize-compose
 
 up: check-config generate-nginx-ports generate-compose-env
 	@echo "Deploying containers"
-	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) up -d
+	@$(COMPOSE_COMMAND) up -d
 
 stop: check-config
 	@echo "Stopping containers"
-	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) stop
+	@$(COMPOSE_COMMAND) stop
 
 restart: check-config
 	@echo "Restarting containers"
-	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) restart
+	@$(COMPOSE_COMMAND) restart
 
 down: check-config
 	@echo "Destroying containers"
-	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) down
+	@$(COMPOSE_COMMAND) down
 
 destroy: check-config
 	@echo "Destroying containers and volumes"
-	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) down -v
+	@$(COMPOSE_COMMAND) down -v
