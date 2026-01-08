@@ -89,6 +89,7 @@ init: check-config update-nginx update-acmed update-acmesh update-dockergen gene
 
 normalize-compose: check-config generate-nginx-ports generate-compose-env
 	@echo "Emitting normalized compose file"
+	@scripts/ensure_docker_compose_v5.sh
 	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) config > normalized-compose.yml
 
 systemd: normalize-compose
