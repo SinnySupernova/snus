@@ -7,11 +7,12 @@ sinny's nginx unprivileged setup
 - git 📦
 - [podman](https://github.com/containers/podman/) 📦 or [docker](https://docs.docker.com/engine/install/) (rootless supported for both)
 - [make](https://www.gnu.org/software/make/) 📦 (also available as a [docker image](https://hub.docker.com/r/alpine/make))
-- [docker compose](https://github.com/docker/compose) 📦
+- [docker-compose](https://github.com/docker/compose) 📦¹
 - access control lists ([ACL](https://wiki.archlinux.org/title/Access_Control_Lists)) 📦
 - a DNS provider capable of DNS-01 challenge (from [this list](https://github.com/acmesh-official/acme.sh/wiki/dnsapi))
 
-📦 - likely available as a package for your system
+📦 - likely available as a package for your system  
+¹  - `docker-compose` must be `v5.0.0` or higher to work with `make systemd`, otherwise `v2.17.0` or higher should work
 
 ## quickstart
 
@@ -41,8 +42,11 @@ runs the setup scripts (update the repos and creates configs for all the tools u
 #### `make systemd`
 creates `systemd` files in `systemd` directory in project root (it's your responsibility to deploy them to the correct place, usually either `$HOME/.config/containers/systemd/` or `/etc/systemd/system`)
 
+> [!NOTE]
+> `docker-compose` must be `v5.0.0` or higher to work with `make systemd`
+
 #### `make up`
-##### internally uses `docker compose up -d` with some extra steps
+##### internally uses `docker-compose up -d` with some extra steps
 
 deploys the containers
 
@@ -50,12 +54,12 @@ deploys the containers
 > first run takes longer because container images are built locally
 
 #### `make stop`
-##### internally uses `docker compose stop` with some extra steps
+##### internally uses `docker-compose stop` with some extra steps
 
 stops the containers
 
 #### `make restart`
-##### internally uses `docker compose restart` with some extra steps
+##### internally uses `docker-compose restart` with some extra steps
 
 restarts the containers
 
@@ -63,12 +67,12 @@ restarts the containers
 > do not use this after updating the repositories because docker compsoe will restart from the old state, use `make up` instead
 
 #### `make down`
-##### internally uses `docker compose down` with some extra steps
+##### internally uses `docker-compose down` with some extra steps
 
 destroys the containers
 
 #### `make destroy`
-##### internally uses `docker compose down -v` with some extra steps
+##### internally uses `docker-compose down -v` with some extra steps
 
 destroys the containers and the volumes
 

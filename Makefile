@@ -89,7 +89,7 @@ init: check-config update-nginx update-acmed update-acmesh update-dockergen gene
 
 normalize-compose: check-config generate-nginx-ports generate-compose-env
 	@echo "Emitting normalized compose file"
-	@$(CONTAINER_RUNTIME) compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) config > normalized-compose.yml
+	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) config > normalized-compose.yml
 
 systemd: normalize-compose
 	@echo "Generating systemd files"
@@ -97,20 +97,20 @@ systemd: normalize-compose
 
 up: check-config generate-nginx-ports generate-compose-env
 	@echo "Deploying containers"
-	@$(CONTAINER_RUNTIME) compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) up -d
+	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) up -d
 
 stop: check-config
 	@echo "Stopping containers"
-	@$(CONTAINER_RUNTIME) compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) stop
+	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) stop
 
 restart: check-config
 	@echo "Restarting containers"
-	@$(CONTAINER_RUNTIME) compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) restart
+	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) restart
 
 down: check-config
 	@echo "Destroying containers"
-	@$(CONTAINER_RUNTIME) compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) down
+	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) down
 
 destroy: check-config
 	@echo "Destroying containers and volumes"
-	@$(CONTAINER_RUNTIME) compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) down -v
+	@docker-compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) down -v
