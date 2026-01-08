@@ -87,6 +87,14 @@ generate-compose-env: check-config update-docker-sock-gid
 
 init: check-config update-nginx update-acmed update-acmesh update-dockergen generate-nginx-ports generate-compose-env
 
+normalize-compose: check-config generate-nginx-ports generate-compose-env
+	@echo "Emitting normalized compose file"
+	@$(CONTAINER_RUNTIME) compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) config > normalized-compose.yml
+
+systemd: normalize-compose
+	@echo "Generating systemd files"
+	@scripts/generate_systemd_files.sh normalized-compose.yml ./systemd
+
 up: check-config generate-nginx-ports generate-compose-env
 	@echo "Deploying containers"
 	@$(CONTAINER_RUNTIME) compose $(COMPOSE_FILES) $(COMPOSE_ENV_FILES) up -d

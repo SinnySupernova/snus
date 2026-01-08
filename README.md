@@ -38,6 +38,9 @@ sinny's nginx unprivileged setup
 #### `make init`
 runs the setup scripts (update the repos and creates configs for all the tools used)
 
+#### `make systemd`
+creates `systemd` files in `systemd` directory in project root (it's your responsibility to deploy them to the correct place, usually either `$HOME/.config/containers/systemd/` or `/etc/systemd/system`)
+
 #### `make up`
 ##### internally uses `docker compose up -d` with some extra steps
 

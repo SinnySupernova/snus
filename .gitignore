@@ -11,6 +11,10 @@
 /certs/acmed/acmed.toml
 /certs/acmed/hook-logs
 
+# systemd
+/normalized-compose.yml
+/systemd
+
 # misc
 /env/*
 **/repo

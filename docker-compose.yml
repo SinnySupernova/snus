@@ -41,9 +41,24 @@ services:
     user: "${NGINX_UID:?error}:${NGINX_GID:?error}"
     userns_mode: keep-id
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/stream-conf.d:/etc/nginx/stream-conf.d:ro
+      - type: bind
+        source: ./nginx/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./nginx/conf.d
+        target: /etc/nginx/conf.d
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./nginx/stream-conf.d
+        target: /etc/nginx/stream-conf.d
+        read_only: true
+        bind:
+          create_host_path: false
       - certs:/etc/nginx/certs:ro
 
   certs:
@@ -80,11 +95,30 @@ services:
       - /tmp
     volumes:
       - acmed-pid:/etc/acmed/pid
-      - ./certs/acmed/acmed.toml:/etc/acmed/acmed.toml:ro
+      - type: bind
+        source: ./certs/acmed/acmed.toml
+        target: /etc/acmed/acmed.toml
+        read_only: true
+        bind:
+          create_host_path: false
       - acmed-accounts:/var/lib/acmed/accounts
-      - ./certs/acmed/hooks:/etc/acmed/hooks:ro
-      - ./certs/acmed/hook-logs:/hook-logs
-      - "${ACMESH_REPO_DIR:?error}:/acmesh:ro"
+      - type: bind
+        source: ./certs/acmed/hooks
+        target: /etc/acmed/hooks
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./certs/acmed/hook-logs
+        target: /hook-logs
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${ACMESH_REPO_DIR:?error}"
+        target: /acmesh
+        read_only: true
+        bind:
+          create_host_path: false
       - certs:/var/lib/acmed/certs
 
   docker-gen:
@@ -122,11 +156,34 @@ services:
     user: "${DOCKERGEN_UID:?error}:${DOCKERGEN_GID:?error}"
     userns_mode: keep-id
     volumes:
-      - ./dockergen/config.toml:/etc/docker-gen/config.toml:ro
-      - ./dockergen/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl:ro
-      - ./dockergen/nginx_stream.tmpl:/etc/docker-gen/templates/nginx_stream.tmpl:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./nginx/stream-conf.d:/etc/nginx/stream-conf.d
+      - type: bind
+        source: ./dockergen/config.toml
+        target: /etc/docker-gen/config.toml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./dockergen/nginx.tmpl
+        target: /etc/docker-gen/templates/nginx.tmpl
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./dockergen/nginx_stream.tmpl
+        target: /etc/docker-gen/templates/nginx_stream.tmpl
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./nginx/conf.d
+        target: /etc/nginx/conf.d
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./nginx/stream-conf.d
+        target: /etc/nginx/stream-conf.d
+        bind:
+          create_host_path: false
       - certs:/etc/nginx/certs:ro
 
   dockerproxy:
@@ -152,7 +209,12 @@ services:
     user: "65534:${DOCKER_SOCK_GID:?error}"
     userns_mode: keep-id
     volumes:
-      - ${DOCKER_SOCK_PATH:?error}:/var/run/docker.sock:ro
+      - type: bind
+        source: ${DOCKER_SOCK_PATH:?error}
+        target: /var/run/docker.sock
+        read_only: true
+        bind:
+          create_host_path: false
 
   init-volumes:
     image: busybox
