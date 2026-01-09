@@ -199,6 +199,7 @@ services:
       - "-shutdowngracetime=5"
       - "-watchdoginterval=600"
       - "-stoponwatchdog"
+    container_name: dockerproxy
     mem_limit: 64M
     networks:
       - docker-proxynet
