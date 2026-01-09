@@ -187,7 +187,7 @@ services:
       - certs:/etc/nginx/certs:ro
 
   dockerproxy:
-    image: wollomatic/socket-proxy:1
+    image: ghcr.io/wollomatic/socket-proxy:1.10.1
     cap_drop:
       - ALL
     command:
@@ -217,7 +217,7 @@ services:
           create_host_path: false
 
   init-volumes:
-    image: busybox
+    image: docker.io/busybox:1.37.0-musl
     cap_drop:
       - ALL
     cap_add:
