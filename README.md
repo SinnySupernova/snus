@@ -12,7 +12,7 @@ sinny's nginx unprivileged setup
 - a DNS provider capable of DNS-01 challenge (from [this list](https://github.com/acmesh-official/acme.sh/wiki/dnsapi))
 
 📦 - likely available as a package for your system  
-¹  - `docker-compose` must be `v5.0.0` or higher to work with `make systemd`, otherwise `v2.17.0` or higher should work
+¹  - `docker-compose` must be `v5.0.0` or higher to work with `make quadlet`, otherwise `v2.17.0` or higher should work
 
 ## quickstart
 
@@ -39,11 +39,11 @@ sinny's nginx unprivileged setup
 #### `make init`
 runs the setup scripts (update the repos and creates configs for all the tools used)
 
-#### `make systemd`
-creates `systemd` files in `systemd` directory in project root (it's your responsibility to deploy them to the correct place, usually either `$HOME/.config/containers/systemd/` or `/etc/systemd/system`)
+#### `make quadlet`
+creates [quadlet](https://docs.podman.io/en/latest/markdown/podman-quadlet.1.html) files in `quadlet` directory in project root (it's your responsibility to deploy them to the correct place, usually either `$HOME/.config/containers/systemd/` or `/etc/systemd/system`)
 
 > [!NOTE]
-> `docker-compose` must be `v5.0.0` or higher to work with `make systemd`
+> `docker-compose` must be `v5.0.0` or higher to work with `make quadlet`
 
 #### `make up`
 ##### internally uses `docker-compose up -d` with some extra steps

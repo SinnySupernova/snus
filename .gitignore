@@ -11,9 +11,9 @@
 /certs/acmed/acmed.toml
 /certs/acmed/hook-logs
 
-# systemd
+# quadlet
 /normalized-compose.yml
-/systemd
+/quadlet
 
 # misc
 /env/*

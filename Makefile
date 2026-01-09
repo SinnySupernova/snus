@@ -95,9 +95,9 @@ normalize-compose: check-config generate-nginx-ports generate-compose-env
 	@scripts/ensure_docker_compose_v5.sh
 	@$(COMPOSE_COMMAND) config > normalized-compose.yml
 
-systemd: normalize-compose
-	@echo "Generating systemd files"
-	@scripts/generate_systemd_files.sh normalized-compose.yml ./systemd
+quadlet: normalize-compose
+	@echo "Generating quadlet files"
+	@scripts/generate_quadlet_files.sh normalized-compose.yml ./quadlet
 
 up: check-config generate-nginx-ports generate-compose-env
 	@echo "Deploying containers"
