@@ -232,6 +232,7 @@ services:
     restart: no
     security_opt:
       - no-new-privileges:true
+    userns_mode: keep-id
     volumes:
       - acmed-accounts:/acmed-accounts
       - certs:/certs
