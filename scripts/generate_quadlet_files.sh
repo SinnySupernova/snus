@@ -22,7 +22,7 @@ find "$target_dir" -mindepth 1 -delete
 podlet_file=$(mktemp)
 trap 'rm "$podlet_file"' EXIT
 
-podlet compose "$input_compose" > "$podlet_file"
+podlet compose "$input_compose" --socket-activate > "$podlet_file"
 
 current_file=""
 
